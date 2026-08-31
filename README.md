@@ -2,13 +2,13 @@
 
 # 🛡️ TRUE FACE AI
 
-### Enterprise-Grade Facial Recognition & Anti-Spoofing Platform
+### AI-Based Facial Recognition and Anti-Spoofing System
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9+-green.svg)](https://python.org)
-[![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen.svg)]()
+[![Project](https://img.shields.io/badge/Project-3rd%20Year%20Mini%20Project-orange.svg)]()
 
-*High-speed 1:N biometric searching with multi-layered liveness detection — authenticating real users across multi-million user databases while blocking physical and digital spoofing in real time.*
+**TRUE FACE AI** is an AI-powered facial recognition and anti-spoofing system designed to authenticate users using facial features while detecting potential presentation attacks and digitally manipulated facial content.
 
 </div>
 
@@ -16,128 +16,232 @@
 
 ## 📋 Table of Contents
 
-- [Problem Statement](#-problem-statement)
-- [Core Solution](#-core-solution)
-- [Key Objectives](#-key-objectives)
-- [Architecture Overview](#-architecture-overview)
-- [Expected Business Impact](#-expected-business-impact)
-- [Tech Stack](#-tech-stack)
-- [Getting Started](#-getting-started)
-- [Contributing](#-contributing)
-- [License](#-license)
+* [About the Project](#-about-the-project)
+* [Problem Statement](#-problem-statement)
+* [Objectives](#-objectives)
+* [Proposed Solution](#-proposed-solution)
+* [System Architecture](#-system-architecture)
+* [Key Features](#-key-features)
+* [Technology Stack](#-technology-stack)
+* [Project Workflow](#-project-workflow)
+* [Getting Started](#-getting-started)
+* [Future Scope](#-future-scope)
+* [Contributors](#-contributors)
+* [License](#-license)
+
+---
+
+## 📌 About the Project
+
+**TRUE FACE AI** is a facial recognition and anti-spoofing project developed as a **3rd-year B.Tech mini project**.
+
+The system combines computer vision, deep learning, facial feature extraction, liveness detection, and vector similarity search to provide a more secure facial authentication workflow.
+
+The project focuses on addressing a major limitation of conventional facial recognition systems: **a face match alone does not necessarily prove that the person in front of the camera is a genuine live user**.
+
+Therefore, TRUE FACE AI introduces additional verification layers to distinguish between genuine users and potential spoofing attempts such as photographs, screen replays, and AI-generated or manipulated facial media.
 
 ---
 
 ## 🔍 Problem Statement
 
-Modern access control systems, banking infrastructure, and digital identity platforms are increasingly vulnerable to sophisticated biometric fraud, deepfake attacks, and scalability bottlenecks.
+Facial recognition systems are increasingly used for authentication and identity verification. However, relying only on facial similarity can make systems vulnerable to different types of spoofing and presentation attacks.
 
-| Challenge | Description |
-|-----------|-------------|
-| **🎭 Presentation & Deepfake Attacks** | Traditional face recognition models can be easily tricked by printed photos, digital video replays, 3D silicone masks, or generative AI deepfakes — exposing financial systems and secure facilities to severe security breaches. |
-| **⏱️ Large-Scale Latency & Accuracy Trade-Offs** | Searching and matching a single face against millions of enrolled user profiles in real time often leads to high latency or high false-positive rates using standard database architectures. |
-| **🌦️ Environmental & Hardware Instability** | Harsh lighting conditions, low-resolution cameras, off-angle facial positions, and aging features frequently cause authentications to fail for legitimate users. |
+### Major Challenges
 
----
-
-## 🧠 Core Solution
-
-An **enterprise-grade facial recognition and anti-spoofing platform** that combines high-speed **1:N biometric searching** with **multi-layered liveness detection**.
-
-By integrating:
-- **Deep Feature Embeddings** — for robust facial representation
-- **CNN-based Liveness Verification** — passive anti-spoofing analysis
-- **Vision Transformer (ViT) Deepfake Detection** — synthetic media identification
-
-The system instantly authenticates real users across multi-million user databases while blocking physical and digital spoofing attempts in real time.
+| Challenge                        | Description                                                                                                                                          |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🎭 **Presentation Attacks**      | Facial recognition systems may be exposed to photographs, video replays, screens, or other artificial representations of a user's face.              |
+| 🤖 **AI-Generated Content**      | Modern generative AI techniques can produce realistic synthetic or manipulated facial content, creating additional challenges for biometric systems. |
+| ⚡ **Large-Scale Searching**      | Searching a captured face against a large collection of registered identities can become computationally expensive.                                  |
+| 🌦️ **Environmental Conditions** | Lighting variations, camera quality, facial angles, and partial occlusions can affect recognition performance.                                       |
 
 ---
 
-## 🎯 Key Objectives
+## 🎯 Objectives
 
-### 1. Deliver High-Speed Biometric Matching
-> Utilize deep facial embeddings to enable ultra-fast, highly accurate **1:N identity searching** across databases containing **millions of records**.
+The primary objectives of TRUE FACE AI are:
 
-### 2. Prevent Multi-Modal Spoofing & Deepfakes
-> Combine CNN-based passive liveness analysis and Vision Transformers to instantly detect **physical spoofs** (photos, screens, 3D masks) and **synthetic digital media** (AI deepfakes).
+### 1. Facial Recognition
 
-### 3. Ensure Environmental Resilience
-> Maintain low **False Acceptance Rates (FAR)** and **False Rejection Rates (FRR)** under poor lighting, varied camera angles, and partial facial occlusions.
+Extract meaningful facial features and compare them with registered facial representations to identify or verify users.
 
-### 4. Enable Sub-Second Processing
-> Execute complete facial capture, liveness verification, vector database matching, and access approval in **under 500 milliseconds**.
+### 2. Liveness Detection
 
-### 5. Support Enterprise Integration
-> Provide flexible **APIs and SDKs** to integrate into:
-> - 🏧 Cardless ATMs
-> - 🚪 Physical security turnstiles
-> - 📱 Mobile banking applications
-> - 🔐 Multi-factor authentication (MFA) pipelines
+Determine whether the captured face belongs to a genuine live person rather than a static or replayed representation.
+
+### 3. Deepfake Detection
+
+Explore the use of deep learning and Vision Transformer-based approaches for identifying manipulated or AI-generated facial content.
+
+### 4. Efficient Identity Search
+
+Use vector similarity search techniques to efficiently compare facial embeddings against a collection of registered users.
+
+### 5. Secure Authentication
+
+Combine the results of facial recognition and anti-spoofing modules to support a more reliable authentication decision.
 
 ---
 
-## 🏗️ Architecture Overview
+## 🧠 Proposed Solution
 
-```
+TRUE FACE AI follows a **multi-stage verification approach**.
+
+The system processes a facial input through multiple stages:
+
+**Face Capture → Face Detection → Liveness Verification → Deepfake Analysis → Feature Extraction → Vector Search → Authentication Decision**
+
+The project combines:
+
+* **Facial Detection** for locating faces in an image or video frame
+* **Deep Facial Embeddings** for representing facial characteristics numerically
+* **CNN-Based Liveness Detection** for identifying potential presentation attacks
+* **Vision Transformer (ViT)** based analysis for exploring deepfake detection
+* **FAISS / Vector Search** for efficient similarity-based identity matching
+* **Backend APIs** for connecting the machine-learning pipeline with applications
+
+---
+
+## 🏗️ System Architecture
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                        TRUE FACE AI                             │
+│                         TRUE FACE AI                            │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐    │
-│  │  Face Capture │──▶│  Liveness    │──▶│  Deepfake        │    │
-│  │  & Detection  │   │  Detection   │   │  Detection (ViT) │    │
-│  │              │   │  (CNN)       │   │                  │    │
-│  └──────────────┘   └──────────────┘   └────────┬─────────┘    │
-│                                                  │              │
-│                                                  ▼              │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐    │
-│  │  Access      │◀──│  1:N Vector  │◀──│  Deep Feature    │    │
-│  │  Decision    │   │  Search      │   │  Embedding       │    │
-│  │  Engine      │   │  (FAISS)     │   │  Extraction      │    │
-│  └──────────────┘   └──────────────┘   └──────────────────┘    │
+│                     📷 Face Capture                             │
+│                            │                                    │
+│                            ▼                                    │
+│                  ┌──────────────────┐                           │
+│                  │  Face Detection  │                           │
+│                  └────────┬─────────┘                           │
+│                           │                                     │
+│                           ▼                                     │
+│              ┌──────────────────────────┐                       │
+│              │   Liveness Detection     │                       │
+│              │          (CNN)            │                       │
+│              └────────────┬─────────────┘                       │
+│                           │                                     │
+│                           ▼                                     │
+│              ┌──────────────────────────┐                       │
+│              │   Deepfake Detection     │                       │
+│              │          (ViT)            │                       │
+│              └────────────┬─────────────┘                       │
+│                           │                                     │
+│                           ▼                                     │
+│              ┌──────────────────────────┐                       │
+│              │ Facial Feature /         │                       │
+│              │ Embedding Extraction     │                       │
+│              └────────────┬─────────────┘                       │
+│                           │                                     │
+│                           ▼                                     │
+│              ┌──────────────────────────┐                       │
+│              │   Vector Similarity      │                       │
+│              │      Search (FAISS)      │                       │
+│              └────────────┬─────────────┘                       │
+│                           │                                     │
+│                           ▼                                     │
+│                  ┌──────────────────┐                           │
+│                  │ Authentication   │                           │
+│                  │     Decision     │                           │
+│                  └──────────────────┘                           │
 │                                                                 │
 ├─────────────────────────────────────────────────────────────────┤
-│  APIs & SDKs  │  Admin Dashboard  │  Monitoring & Analytics    │
+│       Backend API │ Database │ Monitoring │ User Interface     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📈 Expected Business Impact
+## ✨ Key Features
 
-<table>
-  <tr>
-    <td align="center">🔒<br><b>Near-Zero Biometric Fraud</b></td>
-    <td>Eliminates identity theft and unauthorized access caused by stolen photos, video replays, and AI-generated deepfakes.</td>
-  </tr>
-  <tr>
-    <td align="center">💳<br><b>Frictionless Cardless Transactions</b></td>
-    <td>Enables fast, secure, cardless/passwordless user authentication for banking ATMs, corporate doors, and transit gates.</td>
-  </tr>
-  <tr>
-    <td align="center">⚡<br><b>Sub-Second Throughput</b></td>
-    <td>Reduces authentication processing times down to <b>&lt; 500ms</b>, eliminating queues at high-traffic security checkpoints.</td>
-  </tr>
-  <tr>
-    <td align="center">🏢<br><b>Massive Enterprise Scalability</b></td>
-    <td>Handles million-scale identity databases efficiently with low computational cost and high vector search speeds.</td>
-  </tr>
-</table>
+### 🔹 Facial Detection & Recognition
+
+Detects faces and generates facial representations that can be compared against registered identities.
+
+### 🔹 Liveness Detection
+
+Adds an additional verification layer to help identify non-live facial inputs.
+
+### 🔹 Deepfake Analysis
+
+Uses deep learning techniques to investigate whether facial content has been manipulated or synthetically generated.
+
+### 🔹 Vector-Based Searching
+
+Facial embeddings can be indexed and searched using vector similarity techniques for efficient identity matching.
+
+### 🔹 Modular Architecture
+
+The system is divided into independent components, making it easier to test, improve, and extend individual modules.
+
+### 🔹 API-Based Backend
+
+A FastAPI-based backend can provide endpoints for integrating the recognition pipeline with other applications.
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Technology Stack
 
-| Layer | Technologies |
-|-------|-------------|
-| **Face Detection & Embedding** | MTCNN / RetinaFace, ArcFace / FaceNet |
-| **Liveness Detection** | CNN-based passive liveness models |
-| **Deepfake Detection** | Vision Transformer (ViT) |
-| **Vector Search** | FAISS / Milvus |
-| **Backend** | Python, FastAPI |
-| **Database** | PostgreSQL, Redis |
-| **Deployment** | Docker, Kubernetes |
-| **Monitoring** | Prometheus, Grafana |
+| Component                      | Technologies             |
+| ------------------------------ | ------------------------ |
+| **Programming Language**       | Python                   |
+| **Face Detection**             | MTCNN / RetinaFace       |
+| **Face Recognition**           | ArcFace / FaceNet        |
+| **Liveness Detection**         | CNN-based models         |
+| **Deepfake Detection**         | Vision Transformer (ViT) |
+| **Vector Search**              | FAISS / Milvus           |
+| **Backend**                    | FastAPI                  |
+| **Database**                   | PostgreSQL               |
+| **Caching / Fast Data Access** | Redis                    |
+| **Containerization**           | Docker                   |
+| **Monitoring**                 | Prometheus / Grafana     |
+| **Version Control**            | Git & GitHub             |
+
+> **Note:** The exact models and technologies used may evolve during development as the project is tested and evaluated.
+
+---
+
+## 🔄 Project Workflow
+
+```text
+                ┌───────────────┐
+                │  User Input   │
+                │ Camera/Image  │
+                └───────┬───────┘
+                        │
+                        ▼
+                ┌───────────────┐
+                │ Face Detection│
+                └───────┬───────┘
+                        │
+                        ▼
+                ┌───────────────┐
+                │    Liveness   │
+                │   Detection   │
+                └───────┬───────┘
+                        │
+                 Genuine Face?
+                   /       \
+                 No         Yes
+                 │           │
+                 ▼           ▼
+             Reject      Deepfake
+                          Analysis
+                             │
+                             ▼
+                    Feature Extraction
+                             │
+                             ▼
+                       Vector Search
+                             │
+                             ▼
+                    Identity Matching
+                             │
+                             ▼
+                  Authentication Result
+```
 
 ---
 
@@ -145,57 +249,126 @@ The system instantly authenticates real users across multi-million user database
 
 ### Prerequisites
 
-- Python 3.9+
-- CUDA-compatible GPU (recommended)
-- Docker (optional)
+Before running the project, make sure you have:
+
+* Python 3.9 or higher
+* Git
+* A working webcam for real-time testing
+* CUDA-compatible GPU *(recommended for deep-learning workloads)*
+* Docker *(optional)*
 
 ### Installation
 
+Clone the repository:
+
 ```bash
-# Clone the repository
 git clone https://github.com/vanshii2441/TRUE_-FACE_-AI.git
 cd TRUE_-FACE_-AI
+```
 
-# Create virtual environment
+Create a virtual environment:
+
+```bash
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-# Install dependencies
+Activate the environment.
+
+**Windows:**
+
+```bash
+venv\Scripts\activate
+```
+
+**Linux / macOS:**
+
+```bash
+source venv/bin/activate
+```
+
+Install the required dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Quick Start
+### Running the Application
+
+If the FastAPI backend is configured:
 
 ```bash
-# Run the API server
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
-# Run with Docker
+For Docker-based deployment:
+
+```bash
 docker-compose up -d
 ```
 
+> Make sure the required models, environment variables, databases, and configuration files are properly configured before starting the application.
+
 ---
 
-## 🤝 Contributing
+## 🔮 Future Scope
 
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting a pull request.
+The project can be further enhanced in several directions:
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+* Improve recognition accuracy under different lighting conditions
+* Develop stronger passive and active liveness detection
+* Improve robustness against advanced deepfake techniques
+* Optimize vector search for larger identity datasets
+* Add role-based authentication and administrative controls
+* Develop a dedicated web/mobile interface
+* Implement stronger privacy and biometric-data protection mechanisms
+* Evaluate the system using standardized biometric performance metrics
+* Explore edge-device deployment for real-time applications
+
+---
+
+## 🎓 Academic Project
+
+This project has been developed as a **3rd-year B.Tech Mini Project** with the objective of applying concepts from:
+
+* Artificial Intelligence
+* Machine Learning
+* Deep Learning
+* Computer Vision
+* Natural Language & Multimodal AI concepts
+* Database Management
+* Backend Development
+* Software Engineering
+
+The project provides practical exposure to designing and integrating multiple AI components into a single application.
+
+---
+
+## 👥 Contributors
+
+### Project Team
+
+| Name                        | Role        |
+| --------------------------- | ----------- |
+| **Mahi Srivastava**         | Team Member |
+| **Vanshika Agrawal**        | Team Member |
+| **Vaishnavi Singh Rajpoot** | Team Member |
+
+**Team:** Mahi Srivastava · Vanshika Agrawal · Vaishnavi Singh Rajpoot
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for more information.
 
 ---
 
 <div align="center">
 
-**Built with ❤️ by [vanshii2441](https://github.com/vanshii2441)**
+### TRUE FACE AI
+
+**3rd Year B.Tech Mini Project**
+
+**Mahi Srivastava · Vanshika Agrawal · Vaishnavi Singh Rajpoot**
 
 </div>
