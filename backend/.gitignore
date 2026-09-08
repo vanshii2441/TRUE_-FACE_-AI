@@ -1,0 +1,35 @@
+# Virtual environment
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+tests/test_assets/*.jpg
+tests/test_assets/*.png
+*_detected.*
+
+# Logs
+*.log
+
+# Model cache
+.cache/

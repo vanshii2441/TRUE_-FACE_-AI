@@ -16,15 +16,37 @@
 
 ## 📋 Table of Contents
 
+- [Current Implementation Status](#-current-implementation-status)
 - [Problem Statement](#-problem-statement)
 - [Core Solution](#-core-solution)
 - [Key Objectives](#-key-objectives)
 - [Architecture Overview](#-architecture-overview)
+- [Getting Started](#-getting-started)
+- [API Documentation](#-api-documentation)
 - [Expected Business Impact](#-expected-business-impact)
 - [Tech Stack](#-tech-stack)
-- [Getting Started](#-getting-started)
 - [Contributing](#-contributing)
 - [License](#-license)
+
+---
+
+## 🚦 Current Implementation Status
+
+| Module | Status | Details |
+|--------|--------|---------|
+| **React Frontend Dashboard** | ✅ IMPLEMENTED | Vite + React 18 with full UI (Dashboard, Register, Authenticate, Users, Threat Monitor) |
+| **FastAPI Backend** | ✅ IMPLEMENTED | Python backend with health check, CORS, and structured API |
+| **Face Detection (MTCNN)** | ✅ IMPLEMENTED | Detects faces, returns bounding boxes + confidence, crops faces |
+| **Face Detection API** | ✅ IMPLEMENTED | `POST /api/v1/detect-face` — accepts image upload, returns JSON |
+| **Unit Tests** | ✅ IMPLEMENTED | 16 tests covering image utils, detector service, and API endpoint |
+| **Face Embedding (ArcFace)** | ❌ NOT IMPLEMENTED YET | Planned — 512d embedding extraction |
+| **Liveness Detection (CNN)** | ❌ NOT IMPLEMENTED YET | Planned — passive anti-spoofing |
+| **Deepfake Detection (ViT)** | ❌ NOT IMPLEMENTED YET | Planned — Vision Transformer |
+| **FAISS 1:N Search** | ❌ NOT IMPLEMENTED YET | Planned — vector similarity search |
+| **Authentication Engine** | ❌ NOT IMPLEMENTED YET | Planned — decision engine combining all modules |
+| **Sub-500ms Pipeline** | ❌ NOT VERIFIED | Will be benchmarked when full pipeline is built |
+
+> **Note:** Only features marked ✅ are actually implemented and tested in this codebase.
 
 ---
 
@@ -86,7 +108,7 @@ The system instantly authenticates real users across multi-million user database
 │  ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐    │
 │  │  Face Capture │──▶│  Liveness    │──▶│  Deepfake        │    │
 │  │  & Detection  │   │  Detection   │   │  Detection (ViT) │    │
-│  │              │   │  (CNN)       │   │                  │    │
+│  │  ✅ DONE      │   │  (CNN)       │   │                  │    │
 │  └──────────────┘   └──────────────┘   └────────┬─────────┘    │
 │                                                  │              │
 │                                                  ▼              │
@@ -100,6 +122,143 @@ The system instantly authenticates real users across multi-million user database
 │  APIs & SDKs  │  Admin Dashboard  │  Monitoring & Analytics    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.9+
+- Node.js 18+ (for the frontend)
+- CUDA-compatible GPU (recommended, not required)
+
+### Backend Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/vanshii2441/TRUE_-FACE_-AI.git
+cd TRUE_-FACE_-AI
+
+# Create virtual environment
+cd backend
+python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # macOS/Linux
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy environment config (optional — defaults work out of the box)
+copy .env.example .env
+```
+
+### Run the Face Detection API
+
+```bash
+cd backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+The API will be available at:
+- **Swagger UI**: http://localhost:8000/docs
+- **Health Check**: http://localhost:8000/health
+- **Face Detection**: `POST http://localhost:8000/api/v1/detect-face`
+
+### Test the API with curl
+
+```bash
+# Detect faces in an image
+curl -X POST http://localhost:8000/api/v1/detect-face \
+  -F "file=@path/to/photo.jpg"
+```
+
+Example response:
+```json
+{
+  "success": true,
+  "faces_detected": 1,
+  "faces": [
+    {
+      "bbox": [120, 85, 320, 340],
+      "confidence": 0.9987
+    }
+  ],
+  "image_width": 640,
+  "image_height": 480
+}
+```
+
+### Run the CLI Demo
+
+```bash
+cd backend
+python test_face_detection_demo.py --image path/to/photo.jpg
+```
+
+This will detect faces and save an annotated image with bounding boxes.
+
+### Run Tests
+
+```bash
+cd backend
+pytest tests/ -v
+```
+
+### Frontend Setup
+
+```bash
+cd secureface-ai
+npm install
+npm run dev
+```
+
+The React dashboard will be available at http://localhost:5173.
+
+---
+
+## 📡 API Documentation
+
+### `POST /api/v1/detect-face`
+
+Detect faces in an uploaded image.
+
+**Request:** `multipart/form-data` with a `file` field containing the image.
+
+**Accepted formats:** JPEG, PNG, BMP, WebP
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "faces_detected": 1,
+  "faces": [
+    {
+      "bbox": [x1, y1, x2, y2],
+      "confidence": 0.98
+    }
+  ],
+  "image_width": 640,
+  "image_height": 480
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "detail": {
+    "success": false,
+    "error": "Image validation failed",
+    "detail": "Failed to decode image..."
+  }
+}
+```
+
+### `GET /health`
+Returns system health status.
+
+### `GET /`
+Returns API info and available endpoints.
 
 ---
 
@@ -130,49 +289,15 @@ The system instantly authenticates real users across multi-million user database
 
 | Layer | Technologies |
 |-------|-------------|
-| **Face Detection & Embedding** | MTCNN / RetinaFace, ArcFace / FaceNet |
+| **Face Detection & Embedding** | MTCNN (facenet-pytorch) ✅ / RetinaFace, ArcFace / FaceNet |
 | **Liveness Detection** | CNN-based passive liveness models |
 | **Deepfake Detection** | Vision Transformer (ViT) |
 | **Vector Search** | FAISS / Milvus |
-| **Backend** | Python, FastAPI |
+| **Backend** | Python, FastAPI ✅ |
+| **Frontend** | React 18, Vite ✅ |
 | **Database** | PostgreSQL, Redis |
 | **Deployment** | Docker, Kubernetes |
 | **Monitoring** | Prometheus, Grafana |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Python 3.9+
-- CUDA-compatible GPU (recommended)
-- Docker (optional)
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/vanshii2441/TRUE_-FACE_-AI.git
-cd TRUE_-FACE_-AI
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Quick Start
-
-```bash
-# Run the API server
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# Run with Docker
-docker-compose up -d
-```
 
 ---
 
