@@ -17,6 +17,9 @@ class EnrollResponse(BaseModel):
     enrolled_at: str = Field(..., description="ISO 8601 timestamp of enrollment")
     status: str = Field(default="SUCCESS", description="Enrollment status indicator")
     face_confidence: float = Field(..., description="Detection confidence score for enrolled face")
+    liveness_score: float = Field(default=1.0, description="Liveness confidence score (0.0 to 1.0)")
+    is_live: bool = Field(default=True, description="True if face passed liveness anti-spoofing check")
+    liveness_status: str = Field(default="REAL", description="Liveness evaluation status ('REAL' or 'SPOOF')")
     timing_ms: dict[str, float] = Field(
         default_factory=dict,
         description="Execution latency breakdown in milliseconds",
@@ -31,11 +34,15 @@ class EnrollResponse(BaseModel):
                 "enrolled_at": "2026-09-08T12:00:00+00:00",
                 "status": "SUCCESS",
                 "face_confidence": 0.9985,
+                "liveness_score": 0.985,
+                "is_live": True,
+                "liveness_status": "REAL",
                 "timing_ms": {
                     "detection_ms": 45.2,
+                    "liveness_ms": 12.4,
                     "embedding_ms": 32.1,
                     "indexing_ms": 1.5,
-                    "total_ms": 78.8,
+                    "total_ms": 91.2,
                 },
             }
         }
@@ -59,11 +66,11 @@ class RecognizeResponse(BaseModel):
 
     status: str = Field(
         ...,
-        description="Recognition outcome status: 'MATCH', 'NO_MATCH', 'NO_FACE_DETECTED', or 'MULTIPLE_FACES_DETECTED'",
+        description="Recognition outcome status: 'MATCH', 'NO_MATCH', 'SPOOF_DETECTED', 'NO_FACE_DETECTED', or 'MULTIPLE_FACES_DETECTED'",
     )
     is_authenticated: bool = Field(
         ...,
-        description="True if a valid candidate matched above threshold",
+        description="True if a valid candidate matched above threshold and passed liveness check",
     )
     matched_user: RecognizeCandidate | None = Field(
         default=None,
@@ -76,6 +83,18 @@ class RecognizeResponse(BaseModel):
     threshold: float = Field(
         ...,
         description="Cosine similarity decision threshold used for matching",
+    )
+    liveness_score: float = Field(
+        default=1.0,
+        description="Probability that the presentation is a live genuine face (0.0 to 1.0)",
+    )
+    is_live: bool = Field(
+        default=True,
+        description="True if face passed passive anti-spoofing check",
+    )
+    liveness_status: str = Field(
+        default="REAL",
+        description="Anti-spoofing classification status ('REAL' or 'SPOOF')",
     )
     top_candidates: list[RecognizeCandidate] = Field(
         default_factory=list,

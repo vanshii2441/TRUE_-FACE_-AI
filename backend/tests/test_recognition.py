@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.face_detector import FaceDetector, get_face_detector
 from app.services.face_embedding import FaceEmbedder, get_face_embedder
+from app.services.liveness_detector import LivenessDetector, get_liveness_detector
 from app.services.vector_store import VectorStore, get_vector_store
 
 client = TestClient(app)
@@ -152,7 +153,15 @@ class TestRecognitionEndpoints:
         }]
 
         from unittest.mock import patch
-        with patch.object(FaceDetector, "detect_and_crop", return_value=mock_detection):
+        mock_liveness = {
+            "is_live": True,
+            "liveness_score": 0.99,
+            "spoof_score": 0.01,
+            "liveness_status": "REAL",
+            "threshold": 0.70,
+        }
+        with patch.object(FaceDetector, "detect_and_crop", return_value=mock_detection), \
+             patch.object(LivenessDetector, "predict", return_value=mock_liveness):
             # 1. Enroll user
             files = {"file": ("alice.jpg", synthetic_face_jpeg, "image/jpeg")}
             data = {"user_id": "USR001", "name": "Alice Smith"}

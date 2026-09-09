@@ -70,6 +70,27 @@ class Settings(BaseSettings):
         description="Pretrained model weights for InceptionResnetV1 (vggface2 or casia-webface)",
     )
 
+    # --- Liveness Detection ---
+    liveness_threshold: float = Field(
+        default=0.70,
+        ge=0.0,
+        le=1.0,
+        description="Minimum probability threshold for classifying a face crop as REAL live face (calibrate on validation data)",
+    )
+    liveness_model_path: str = Field(
+        default="models/liveness/best_model.pth",
+        description="Path to saved PyTorch CNN liveness model checkpoint",
+    )
+    liveness_input_size: int = Field(
+        default=128,
+        gt=0,
+        description="Input square dimension (pixels) expected by the liveness CNN model",
+    )
+    enable_liveness_check: bool = Field(
+        default=True,
+        description="Toggle liveness anti-spoofing gating during face recognition",
+    )
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

@@ -1,56 +1,110 @@
 /**
- * SecureFace AI — API Service (Placeholder)
+ * TRUE FACE AI — Production API Client Service
  *
- * This module will be implemented in Step 2 when the backend is built.
- * For now, it exports stub functions that simulate API responses.
+ * Connects React Frontend to FastAPI AI backend endpoints.
  */
 
 const API_BASE_URL = 'http://localhost:8000'
 
 /**
- * Register a new user with their face image.
- * POST /register
+ * Register/enroll a user face with 512d ArcFace embedding and FAISS vector indexing.
+ * POST /api/v1/enroll
  */
 export async function registerUser(formData) {
-  // TODO: Implement in Step 2
-  // return await fetch(`${API_BASE_URL}/register`, {
-  //   method: 'POST',
-  //   body: formData,
-  // }).then(res => res.json())
-
-  return {
-    status: 'SUCCESS',
-    message: 'Registration endpoint not yet connected.',
-    userId: formData.get('userId'),
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/enroll`, {
+      method: 'POST',
+      body: formData,
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || data.error || 'Face enrollment failed')
+    }
+    return data
+  } catch (error) {
+    console.error('Error registering user:', error)
+    throw error
   }
 }
 
 /**
- * Recognize a face against registered users.
- * POST /recognize
+ * Recognize a query face image against FAISS vector database (1:N search).
+ * POST /api/v1/recognize
  */
 export async function recognizeFace(formData) {
-  // TODO: Implement in Step 2
-  // return await fetch(`${API_BASE_URL}/recognize`, {
-  //   method: 'POST',
-  //   body: formData,
-  // }).then(res => res.json())
-
-  return {
-    status: 'UNKNOWN',
-    message: 'Recognition endpoint not yet connected.',
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/recognize`, {
+      method: 'POST',
+      body: formData,
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || data.error || 'Face recognition failed')
+    }
+    return data
+  } catch (error) {
+    console.error('Error recognizing face:', error)
+    throw error
   }
 }
 
 /**
- * Fetch all registered users.
- * GET /users
+ * Fetch all registered users in FAISS database.
+ * GET /api/v1/users
  */
 export async function getUsers() {
-  // TODO: Implement in Step 2
-  // return await fetch(`${API_BASE_URL}/users`).then(res => res.json())
-
-  return { users: [], total: 0 }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/users`)
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to fetch registered users')
+    }
+    return data
+  } catch (error) {
+    console.error('Error fetching users:', error)
+    throw error
+  }
 }
 
-export default { registerUser, recognizeFace, getUsers }
+/**
+ * Reset/clear all vectors and metadata in vector store.
+ * DELETE /api/v1/users/reset
+ */
+export async function resetUsers() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/users/reset`, {
+      method: 'DELETE',
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to reset vector database')
+    }
+    return data
+  } catch (error) {
+    console.error('Error resetting database:', error)
+    throw error
+  }
+}
+
+/**
+ * Detect faces and bounding boxes in an uploaded image.
+ * POST /api/v1/detect-face
+ */
+export async function detectFace(formData) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/detect-face`, {
+      method: 'POST',
+      body: formData,
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Face detection failed')
+    }
+    return data
+  } catch (error) {
+    console.error('Error detecting face:', error)
+    throw error
+  }
+}
+
+export default { registerUser, recognizeFace, getUsers, resetUsers, detectFace }

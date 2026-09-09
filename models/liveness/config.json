@@ -1,0 +1,10 @@
+{
+  "architecture": "LivenessNet",
+  "epochs": 5,
+  "batch_size": 16,
+  "learning_rate": 0.001,
+  "input_size": 128,
+  "best_val_accuracy": 0.9833,
+  "training_time_seconds": 21.32,
+  "data_dir": "data/liveness"
+}

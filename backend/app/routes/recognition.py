@@ -28,6 +28,7 @@ from app.services.image_utils import (
     ImageValidationError,
     load_image_from_bytes,
 )
+from app.services.liveness_detector import get_liveness_detector
 from app.services.vector_store import get_vector_store
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,28 @@ async def enroll_face(
     face_crop = detections[0]["crop"]
     face_conf = detections[0]["confidence"]
 
-    # 2. Face Embedding
+    # 2. Passive Anti-Spoofing Liveness Analysis
+    t_liv_start = time.perf_counter()
+    liveness_detector = get_liveness_detector()
+    liveness_res = liveness_detector.predict(face_crop)
+    t_liv_end = time.perf_counter()
+    liveness_ms = (t_liv_end - t_liv_start) * 1000.0
+
+    if settings.enable_liveness_check and not liveness_res["is_live"]:
+        logger.warning(
+            "Enrollment rejected due to spoof detection for user %s (Liveness score: %.4f)",
+            user_id,
+            liveness_res["liveness_score"],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Presentation attack detected! Enrollment requires a live face. "
+                f"Liveness score: {liveness_res['liveness_score']:.2f} (Threshold: {liveness_res['threshold']:.2f})"
+            ),
+        )
+
+    # 3. Face Embedding
     t_emb_start = time.perf_counter()
     embedder = get_face_embedder()
     try:
@@ -108,7 +130,7 @@ async def enroll_face(
         except Exception:
             meta_dict = {"raw_metadata": extra_metadata}
 
-    # 3. Vector Database Indexing
+    # 4. Vector Database Indexing
     t_idx_start = time.perf_counter()
     vector_store = get_vector_store()
     try:
@@ -140,8 +162,12 @@ async def enroll_face(
         enrolled_at=enrolled_at,
         status="SUCCESS",
         face_confidence=face_conf,
+        liveness_score=liveness_res["liveness_score"],
+        is_live=liveness_res["is_live"],
+        liveness_status=liveness_res["liveness_status"],
         timing_ms={
             "detection_ms": round(detection_ms, 2),
+            "liveness_ms": round(liveness_ms, 2),
             "embedding_ms": round(embedding_ms, 2),
             "indexing_ms": round(indexing_ms, 2),
             "total_ms": round(total_ms, 2),
@@ -197,10 +223,14 @@ async def recognize_face(
             matched_user=None,
             best_similarity=0.0,
             threshold=use_threshold,
+            liveness_score=0.0,
+            is_live=False,
+            liveness_status="SPOOF",
             top_candidates=[],
             detected_faces_count=0,
             timing_ms={
                 "detection_ms": round(detection_ms, 2),
+                "liveness_ms": 0.0,
                 "embedding_ms": 0.0,
                 "search_ms": 0.0,
                 "total_ms": round((t_total_end - t_start) * 1000.0, 2),
@@ -216,10 +246,14 @@ async def recognize_face(
             matched_user=None,
             best_similarity=0.0,
             threshold=use_threshold,
+            liveness_score=0.0,
+            is_live=False,
+            liveness_status="SPOOF",
             top_candidates=[],
             detected_faces_count=detected_count,
             timing_ms={
                 "detection_ms": round(detection_ms, 2),
+                "liveness_ms": 0.0,
                 "embedding_ms": 0.0,
                 "search_ms": 0.0,
                 "total_ms": round((t_total_end - t_start) * 1000.0, 2),
@@ -228,7 +262,40 @@ async def recognize_face(
 
     primary_face_crop = detections[0]["crop"]
 
-    # 2. Face Embedding
+    # 2. Passive Anti-Spoofing Liveness Analysis
+    t_liv_start = time.perf_counter()
+    liveness_detector = get_liveness_detector()
+    liveness_res = liveness_detector.predict(primary_face_crop)
+    t_liv_end = time.perf_counter()
+    liveness_ms = (t_liv_end - t_liv_start) * 1000.0
+
+    if settings.enable_liveness_check and not liveness_res["is_live"]:
+        t_total_end = time.perf_counter()
+        logger.warning(
+            "Recognition authentication blocked by anti-spoofing engine (Liveness score: %.4f)",
+            liveness_res["liveness_score"],
+        )
+        return RecognizeResponse(
+            status="SPOOF_DETECTED",
+            is_authenticated=False,
+            matched_user=None,
+            best_similarity=0.0,
+            threshold=use_threshold,
+            liveness_score=liveness_res["liveness_score"],
+            is_live=False,
+            liveness_status="SPOOF",
+            top_candidates=[],
+            detected_faces_count=detected_count,
+            timing_ms={
+                "detection_ms": round(detection_ms, 2),
+                "liveness_ms": round(liveness_ms, 2),
+                "embedding_ms": 0.0,
+                "search_ms": 0.0,
+                "total_ms": round((t_total_end - t_start) * 1000.0, 2),
+            },
+        )
+
+    # 3. Face Embedding
     t_emb_start = time.perf_counter()
     embedder = get_face_embedder()
     try:
@@ -242,7 +309,7 @@ async def recognize_face(
     t_emb_end = time.perf_counter()
     embedding_ms = (t_emb_end - t_emb_start) * 1000.0
 
-    # 3. FAISS 1:N Vector Search
+    # 4. FAISS 1:N Vector Search
     t_srch_start = time.perf_counter()
     vector_store = get_vector_store()
     raw_candidates = vector_store.search(
@@ -270,10 +337,14 @@ async def recognize_face(
         matched_user=matched_candidate,
         best_similarity=best_sim,
         threshold=use_threshold,
+        liveness_score=liveness_res["liveness_score"],
+        is_live=liveness_res["is_live"],
+        liveness_status=liveness_res["liveness_status"],
         top_candidates=top_candidates,
         detected_faces_count=detected_count,
         timing_ms={
             "detection_ms": round(detection_ms, 2),
+            "liveness_ms": round(liveness_ms, 2),
             "embedding_ms": round(embedding_ms, 2),
             "search_ms": round(search_ms, 2),
             "total_ms": round(total_ms, 2),

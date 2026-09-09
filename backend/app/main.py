@@ -15,6 +15,7 @@ from app.routes.detection import router as detection_router
 from app.routes.recognition import router as recognition_router
 from app.services.face_detector import get_face_detector
 from app.services.face_embedding import get_face_embedder
+from app.services.liveness_detector import get_liveness_detector
 from app.services.vector_store import get_vector_store
 
 # ── Logging setup ──────────────────────────────────────────────
@@ -29,12 +30,14 @@ logger = logging.getLogger(__name__)
 # ── Lifespan: pre-load models at startup ──────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load MTCNN, InceptionResnetV1, and FAISS index at startup."""
+    """Load MTCNN, InceptionResnetV1, LivenessNet, and FAISS index at startup."""
     logger.info("Starting %s v%s", settings.app_name, settings.app_version)
     logger.info("Loading face detection model...")
     get_face_detector()
     logger.info("Loading face embedding model...")
     get_face_embedder()
+    logger.info("Loading passive liveness anti-spoofing model...")
+    get_liveness_detector()
     logger.info("Loading FAISS vector store...")
     get_vector_store()
     logger.info("All AI models and vector store ready.")
