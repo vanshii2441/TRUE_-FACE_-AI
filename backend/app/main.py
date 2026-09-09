@@ -12,7 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routes.detection import router as detection_router
+from app.routes.recognition import router as recognition_router
 from app.services.face_detector import get_face_detector
+from app.services.face_embedding import get_face_embedder
+from app.services.vector_store import get_vector_store
 
 # ── Logging setup ──────────────────────────────────────────────
 logging.basicConfig(
@@ -23,14 +26,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ── Lifespan: pre-load the face detector at startup ───────────
+# ── Lifespan: pre-load models at startup ──────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load the MTCNN model once at startup so the first request isn't slow."""
+    """Load MTCNN, InceptionResnetV1, and FAISS index at startup."""
     logger.info("Starting %s v%s", settings.app_name, settings.app_version)
     logger.info("Loading face detection model...")
-    get_face_detector()  # warm up the singleton
-    logger.info("Face detection model ready.")
+    get_face_detector()
+    logger.info("Loading face embedding model...")
+    get_face_embedder()
+    logger.info("Loading FAISS vector store...")
+    get_vector_store()
+    logger.info("All AI models and vector store ready.")
     yield
     logger.info("Shutting down %s.", settings.app_name)
 
@@ -41,7 +48,7 @@ app = FastAPI(
     version=settings.app_version,
     description=(
         "Enterprise-grade facial recognition & anti-spoofing API. "
-        "Currently implements face detection via MTCNN."
+        "Implements MTCNN face detection, InceptionResnetV1 ArcFace embedding, and FAISS 1:N recognition."
     ),
     lifespan=lifespan,
 )
@@ -57,6 +64,7 @@ app.add_middleware(
 
 # ── Routers ────────────────────────────────────────────────────
 app.include_router(detection_router)
+app.include_router(recognition_router)
 
 
 # ── Health check ───────────────────────────────────────────────
@@ -67,6 +75,7 @@ async def health_check() -> dict:
         "status": "healthy",
         "service": settings.app_name,
         "version": settings.app_version,
+        "enrolled_faces": get_vector_store().count(),
     }
 
 
@@ -80,5 +89,9 @@ async def root() -> dict:
         "health": "/health",
         "endpoints": {
             "detect_face": "POST /api/v1/detect-face",
+            "enroll_face": "POST /api/v1/enroll",
+            "recognize_face": "POST /api/v1/recognize",
+            "list_users": "GET /api/v1/users",
+            "reset_db": "DELETE /api/v1/users/reset",
         },
     }

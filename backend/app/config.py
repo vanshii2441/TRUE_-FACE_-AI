@@ -45,6 +45,31 @@ class Settings(BaseSettings):
         description="Allowed CORS origins",
     )
 
+    # --- Face Recognition & Vector DB ---
+    face_match_threshold: float = Field(
+        default=0.60,
+        ge=0.0,
+        le=1.0,
+        description="Cosine similarity threshold for face match decision",
+    )
+    top_k: int = Field(
+        default=5,
+        gt=0,
+        description="Number of top candidates to return during recognition search",
+    )
+    faiss_index_path: str = Field(
+        default="data/faiss/index.bin",
+        description="Path to saved FAISS binary index file",
+    )
+    faiss_metadata_path: str = Field(
+        default="data/faiss/metadata.json",
+        description="Path to saved vector metadata JSON file",
+    )
+    embedding_model_name: str = Field(
+        default="vggface2",
+        description="Pretrained model weights for InceptionResnetV1 (vggface2 or casia-webface)",
+    )
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

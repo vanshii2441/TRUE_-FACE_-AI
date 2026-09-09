@@ -35,16 +35,16 @@
 | Module | Status | Details |
 |--------|--------|---------|
 | **React Frontend Dashboard** | ✅ IMPLEMENTED | Vite + React 18 with full UI (Dashboard, Register, Authenticate, Users, Threat Monitor) |
-| **FastAPI Backend** | ✅ IMPLEMENTED | Python backend with health check, CORS, and structured API |
+| **FastAPI Backend** | ✅ IMPLEMENTED | Python backend with health check, CORS, structured API, and lifespan preloading |
 | **Face Detection (MTCNN)** | ✅ IMPLEMENTED | Detects faces, returns bounding boxes + confidence, crops faces |
-| **Face Detection API** | ✅ IMPLEMENTED | `POST /api/v1/detect-face` — accepts image upload, returns JSON |
-| **Unit Tests** | ✅ IMPLEMENTED | 16 tests covering image utils, detector service, and API endpoint |
-| **Face Embedding (ArcFace)** | ❌ NOT IMPLEMENTED YET | Planned — 512d embedding extraction |
+| **Face Detection API** | ✅ IMPLEMENTED | `POST /api/v1/detect-face` — accepts image upload, returns bounding box JSON |
+| **Face Embedding (ArcFace)** | ✅ IMPLEMENTED | InceptionResnetV1 (VGGFace2/CASIA-WebFace) 512d L2-normalized feature extraction |
+| **FAISS 1:N Search** | ✅ IMPLEMENTED | `IndexFlatIP` vector index with persistent JSON metadata for sub-millisecond matching |
+| **Recognition & Enrollment API** | ✅ IMPLEMENTED | `POST /api/v1/enroll`, `POST /api/v1/recognize`, `GET /api/v1/users`, `DELETE /api/v1/users/reset` |
+| **Unit & Integration Tests** | ✅ IMPLEMENTED | 25 tests covering image utils, detector, embedder, vector store, and recognition APIs |
 | **Liveness Detection (CNN)** | ❌ NOT IMPLEMENTED YET | Planned — passive anti-spoofing |
 | **Deepfake Detection (ViT)** | ❌ NOT IMPLEMENTED YET | Planned — Vision Transformer |
-| **FAISS 1:N Search** | ❌ NOT IMPLEMENTED YET | Planned — vector similarity search |
-| **Authentication Engine** | ❌ NOT IMPLEMENTED YET | Planned — decision engine combining all modules |
-| **Sub-500ms Pipeline** | ❌ NOT VERIFIED | Will be benchmarked when full pipeline is built |
+| **Sub-500ms Pipeline** | ❌ NOT VERIFIED | Will be benchmarked when liveness models are integrated |
 
 > **Note:** Only features marked ✅ are actually implemented and tested in this codebase.
 
@@ -254,8 +254,68 @@ Detect faces in an uploaded image.
 }
 ```
 
+### `POST /api/v1/enroll`
+
+Enroll a new face identity into the FAISS vector database.
+
+**Request:** `multipart/form-data`
+- `file`: Image file containing a clear face.
+- `user_id`: Unique user string ID (e.g. `USR001`).
+- `name`: User full name (e.g. `Jane Doe`).
+
+**Response (201):**
+```json
+{
+  "user_id": "USR001",
+  "name": "Jane Doe",
+  "faiss_id": 0,
+  "status": "SUCCESS",
+  "timing_ms": {
+    "detection_ms": 45.2,
+    "embedding_ms": 32.1,
+    "total_ms": 78.5
+  }
+}
+```
+
+### `POST /api/v1/recognize`
+
+Recognize an unknown face by searching against enrolled vectors (1:N search).
+
+**Request:** `multipart/form-data` with `file` field containing query image.
+
+**Response (200 - Match):**
+```json
+{
+  "status": "MATCH",
+  "is_authenticated": true,
+  "matched_user": {
+    "user_id": "USR001",
+    "name": "Jane Doe",
+    "similarity": 0.8942,
+    "faiss_id": 0,
+    "is_match": true
+  },
+  "best_similarity": 0.8942,
+  "detected_faces_count": 1,
+  "candidates": [...],
+  "timing_ms": {
+    "detection_ms": 42.0,
+    "embedding_ms": 31.5,
+    "search_ms": 1.2,
+    "total_ms": 75.1
+  }
+}
+```
+
+### `GET /api/v1/users`
+List all currently enrolled face profiles and vector database statistics.
+
+### `DELETE /api/v1/users/reset`
+Reset and clear the entire FAISS vector database and user registry.
+
 ### `GET /health`
-Returns system health status.
+Returns system health status and total number of enrolled faces.
 
 ### `GET /`
 Returns API info and available endpoints.

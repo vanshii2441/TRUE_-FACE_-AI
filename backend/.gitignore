@@ -31,5 +31,6 @@ tests/test_assets/*.png
 # Logs
 *.log
 
-# Model cache
+# Model cache & Vector data
 .cache/
+data/
