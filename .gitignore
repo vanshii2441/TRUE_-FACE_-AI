@@ -17,6 +17,7 @@ dist/
 
 # Environment & IDE
 .env
+backend/.env
 .vscode/
 .idea/
 *.swp
@@ -24,5 +25,7 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs & Cache
 *.log
+backend/.cache/
+backend/data/

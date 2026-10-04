@@ -91,6 +91,12 @@ class Settings(BaseSettings):
         description="Toggle liveness anti-spoofing gating during face recognition",
     )
 
+    # --- MongoDB Atlas ---
+    mongodb_uri: str = Field(
+        default="",
+        description="MongoDB Atlas connection string URI",
+    )
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
