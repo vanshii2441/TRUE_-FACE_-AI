@@ -41,18 +41,20 @@ function Authenticate() {
     }
   }
 
+  const decision = result?.final_decision || result?.status
+
   return (
     <div className="animate-in">
       <div className="page-header">
-        <h1>Live Authentication & Anti-Spoofing</h1>
+        <h1>Live Face Authentication & Deepfake Verification</h1>
         <p>
-          Authenticate identities against the enrolled FAISS database.
-          Each face undergo passive liveness anti-spoofing verification before 512d ArcFace vector matching.
+          End-to-end multi-layer AI security pipeline:
+          Face Detection → Passive Liveness → Deepfake Detection → 512d ArcFace Embedding → FAISS 1:N Recognition.
         </p>
       </div>
 
       {/* Upload & Preview Card */}
-      <div className="card mb-24" style={{ maxWidth: '640px', margin: '0 auto 24px auto' }}>
+      <div className="card mb-24" style={{ maxWidth: '680px', margin: '0 auto 24px auto' }}>
         <div className="card-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="card-icon primary">
@@ -62,7 +64,7 @@ function Authenticate() {
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
             </div>
-            <span className="card-title">Query Image Input</span>
+            <span className="card-title">Authentication Query Input</span>
           </div>
           {selectedFile && (
             <span className="badge badge-success">Image Selected</span>
@@ -135,7 +137,7 @@ function Authenticate() {
             disabled={!selectedFile || loading}
           >
             {loading ? (
-              <span>Running AI Pipeline...</span>
+              <span>Running Deep Learning Pipeline...</span>
             ) : (
               <>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -157,102 +159,192 @@ function Authenticate() {
 
       {/* Result Section */}
       {result && (
-        <div className="result-section animate-in" id="auth-result-section" style={{ maxWidth: '640px', margin: '0 auto' }}>
-          <div className="section-title">Authentication Result</div>
+        <div className="result-section animate-in" id="auth-result-section" style={{ maxWidth: '680px', margin: '0 auto' }}>
+          <div className="section-title" style={{ marginBottom: '16px', fontWeight: 600, fontSize: 'var(--font-lg)' }}>
+            Verification Decision & Risk Metrics
+          </div>
 
-          {result.status === 'MATCH' && (
+          {/* 1. AUTHENTICATED / MATCH */}
+          {(decision === 'AUTHENTICATED' || decision === 'MATCH') && (
             <div className="card" style={{ borderLeft: '4px solid #10b981', background: 'rgba(16,185,129,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <span className="badge badge-success" style={{ padding: '6px 12px', fontSize: 'var(--font-sm)' }}>
-                  ✓ IDENTITY AUTHENTICATED
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <span className="badge badge-success" style={{ padding: '6px 12px', fontSize: 'var(--font-sm)', fontWeight: 700 }}>
+                  ✓ AUTHENTICATED
                 </span>
                 <span className="badge badge-primary">
-                  Liveness: {(result.liveness_score * 100).toFixed(1)}% REAL
+                  Liveness: {((result.liveness_score ?? 1) * 100).toFixed(1)}% REAL
+                </span>
+                <span className="badge badge-info">
+                  Deepfake Prob: {((result.deepfake_probability ?? 0) * 100).toFixed(1)}%
                 </span>
               </div>
 
-              {result.matched_user && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '8px' }}>
-                  <div>
-                    <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Name</span>
-                    <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {result.matched_user.name}
-                    </p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>User ID</span>
-                    <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: 'var(--primary)', fontFamily: 'monospace' }}>
-                      {result.matched_user.user_id}
-                    </p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>ArcFace Match Similarity</span>
-                    <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: '#10b981' }}>
-                      {(result.matched_user.similarity * 100).toFixed(2)}%
-                    </p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Liveness Status</span>
-                    <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: '#10b981' }}>
-                      PASSED (Genuine Live Face)
-                    </p>
-                  </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '8px' }}>
+                <div>
+                  <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Identity</span>
+                  <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {result.identity || result.matched_user?.name || 'Verified User'}
+                  </p>
                 </div>
-              )}
-            </div>
-          )}
-
-          {result.status === 'SPOOF_DETECTED' && (
-            <div className="card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                <span className="badge badge-warning" style={{ background: '#ef4444', color: '#fff', padding: '6px 12px', fontSize: 'var(--font-sm)' }}>
-                  🚫 SPOOF ATTACK BLOCKED
-                </span>
-                <span className="badge badge-danger">
-                  Liveness: {(result.liveness_score * 100).toFixed(1)}% (SPOOF)
-                </span>
+                <div>
+                  <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>User ID</span>
+                  <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: 'var(--primary)', fontFamily: 'monospace' }}>
+                    {result.matched_user?.user_id || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Similarity Score</span>
+                  <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: '#10b981' }}>
+                    {(((result.similarity_score ?? result.best_similarity ?? 0)) * 100).toFixed(2)}%
+                  </p>
+                </div>
+                <div>
+                  <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Final Decision</span>
+                  <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: '#10b981' }}>
+                    AUTHENTICATED
+                  </p>
+                </div>
               </div>
-              <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-sm)' }}>
-                The passive liveness anti-spoofing engine detected a presentation attack (e.g. printed photo or digital screen replay). Access rejected.
-              </p>
             </div>
           )}
 
-          {result.status === 'NO_MATCH' && (
+          {/* 2. UNKNOWN_USER / NO_MATCH */}
+          {(decision === 'UNKNOWN_USER' || decision === 'NO_MATCH') && (
             <div className="card" style={{ borderLeft: '4px solid #f59e0b', background: 'rgba(245,158,11,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                <span className="badge badge-warning" style={{ padding: '6px 12px', fontSize: 'var(--font-sm)' }}>
-                  NO MATCH FOUND
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <span className="badge badge-warning" style={{ padding: '6px 12px', fontSize: 'var(--font-sm)', fontWeight: 700 }}>
+                  ⚠️ UNKNOWN USER
                 </span>
                 <span className="badge badge-success">
-                  Liveness: {(result.liveness_score * 100).toFixed(1)}% REAL
+                  Liveness: {((result.liveness_score ?? 1) * 100).toFixed(1)}% REAL
+                </span>
+                <span className="badge badge-info">
+                  Deepfake Prob: {((result.deepfake_probability ?? 0) * 100).toFixed(1)}%
                 </span>
               </div>
-              <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-sm)' }}>
-                Face passed liveness check, but similarity score did not match any enrolled user above threshold ({(result.threshold * 100).toFixed(0)}%).
+              <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-sm)', marginBottom: '12px' }}>
+                Face passed anti-spoofing and deepfake checks, but face similarity score did not match any enrolled user above the threshold ({(result.threshold * 100).toFixed(0)}%).
               </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px' }}>
+                <div>
+                  <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Best Similarity Score</span>
+                  <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: '#f59e0b' }}>
+                    {(((result.similarity_score ?? result.best_similarity ?? 0)) * 100).toFixed(2)}%
+                  </p>
+                </div>
+                <div>
+                  <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Final Decision</span>
+                  <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: '#f59e0b' }}>
+                    UNKNOWN_USER
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
-          {result.status === 'NO_FACE_DETECTED' && (
-            <div className="card" style={{ borderLeft: '4px solid #f59e0b' }}>
-              <div style={{ fontWeight: 600, color: '#f59e0b', marginBottom: '4px' }}>
-                No Face Detected
+          {/* 3. LIVENESS_FAILED / SPOOF_DETECTED */}
+          {(decision === 'LIVENESS_FAILED' || decision === 'SPOOF_DETECTED') && (
+            <div className="card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <span className="badge badge-danger" style={{ background: '#ef4444', color: '#fff', padding: '6px 12px', fontSize: 'var(--font-sm)', fontWeight: 700 }}>
+                  🚫 LIVENESS FAILED
+                </span>
+                <span className="badge badge-danger">
+                  Liveness Score: {((result.liveness_score ?? 0) * 100).toFixed(1)}% (SPOOF)
+                </span>
+              </div>
+              <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-sm)', marginBottom: '12px' }}>
+                The passive liveness anti-spoofing engine detected a presentation attack (e.g., printed photo, screen photo, or video replay). Authentication blocked.
+              </p>
+              <div style={{ background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px' }}>
+                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Final Decision</span>
+                <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: '#ef4444' }}>
+                  LIVENESS_FAILED
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* 4. DEEPFAKE_SUSPECTED */}
+          {decision === 'DEEPFAKE_SUSPECTED' && (
+            <div className="card" style={{ borderLeft: '4px solid #8b5cf6', background: 'rgba(139,92,246,0.08)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <span className="badge" style={{ background: '#8b5cf6', color: '#fff', padding: '6px 12px', fontSize: 'var(--font-sm)', fontWeight: 700 }}>
+                  🤖 DEEPFAKE SUSPECTED
+                </span>
+                <span className="badge" style={{ background: 'rgba(139,92,246,0.2)', color: '#8b5cf6' }}>
+                  Deepfake Prob: {((result.deepfake_probability ?? 0) * 100).toFixed(1)}%
+                </span>
+              </div>
+              <p style={{ color: 'var(--text-primary)', fontSize: 'var(--font-sm)', marginBottom: '12px' }}>
+                The DeepfakeNet neural network detected synthetic face manipulation (e.g. AI face-swap, GAN/Diffusion generation, or neural facial edits). Access blocked.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px' }}>
+                <div>
+                  <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Deepfake Probability</span>
+                  <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: '#8b5cf6' }}>
+                    {((result.deepfake_probability ?? 0) * 100).toFixed(1)}%
+                  </p>
+                </div>
+                <div>
+                  <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Final Decision</span>
+                  <p style={{ fontSize: 'var(--font-md)', fontWeight: 600, color: '#8b5cf6' }}>
+                    DEEPFAKE_SUSPECTED
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. NO_FACE / NO_FACE_DETECTED */}
+          {(decision === 'NO_FACE' || decision === 'NO_FACE_DETECTED') && (
+            <div className="card" style={{ borderLeft: '4px solid #f59e0b', background: 'rgba(245,158,11,0.05)' }}>
+              <div style={{ fontWeight: 700, color: '#f59e0b', marginBottom: '6px', fontSize: 'var(--font-md)' }}>
+                ❓ NO FACE DETECTED
               </div>
               <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
-                MTCNN could not locate a clear human face in the uploaded image. Please try another photo.
+                MTCNN face detection layer could not locate a human face in the query image. Please upload a clear photo with a single face.
               </p>
             </div>
           )}
 
-          {/* Latency Breakdown */}
+          {/* 6. LOW_CONFIDENCE / MULTIPLE_FACES_DETECTED */}
+          {(decision === 'LOW_CONFIDENCE' || decision === 'MULTIPLE_FACES_DETECTED') && (
+            <div className="card" style={{ borderLeft: '4px solid #eab308', background: 'rgba(234,179,8,0.05)' }}>
+              <div style={{ fontWeight: 700, color: '#eab308', marginBottom: '6px', fontSize: 'var(--font-md)' }}>
+                ⚠️ LOW CONFIDENCE / MULTIPLE FACES
+              </div>
+              <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
+                Face detection confidence was below the configured threshold ({result.threshold ? `${result.threshold * 100}%` : 'threshold'}), or multiple faces were detected.
+              </p>
+            </div>
+          )}
+
+          {/* 7. SYSTEM_ERROR */}
+          {decision === 'SYSTEM_ERROR' && (
+            <div className="card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.08)' }}>
+              <div style={{ fontWeight: 700, color: '#ef4444', marginBottom: '6px', fontSize: 'var(--font-md)' }}>
+                💥 SYSTEM ERROR
+              </div>
+              <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
+                An internal processing error occurred while evaluating the biometric pipeline. Please check server logs and try again.
+              </p>
+            </div>
+          )}
+
+          {/* Latency Breakdown & Metrics Pill Row */}
           {result.timing_ms && (
-            <div style={{ marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-              <span className="badge badge-secondary">Detection: {result.timing_ms.detection_ms}ms</span>
-              <span className="badge badge-secondary">Liveness: {result.timing_ms.liveness_ms}ms</span>
-              <span className="badge badge-secondary">Embedding: {result.timing_ms.embedding_ms}ms</span>
-              <span className="badge badge-secondary">1:N FAISS Search: {result.timing_ms.search_ms}ms</span>
-              <span className="badge badge-primary">Total Pipeline: {result.timing_ms.total_ms}ms</span>
+            <div style={{ marginTop: '20px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+              <span className="badge badge-secondary">Face Detection: {result.timing_ms.detection_ms ?? 0}ms</span>
+              <span className="badge badge-secondary">Liveness: {result.timing_ms.liveness_ms ?? 0}ms</span>
+              <span className="badge badge-secondary" style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>
+                Deepfake: {result.timing_ms.deepfake_ms ?? 0}ms
+              </span>
+              <span className="badge badge-secondary">Embedding: {result.timing_ms.embedding_ms ?? 0}ms</span>
+              <span className="badge badge-secondary">1:N FAISS: {result.timing_ms.search_ms ?? 0}ms</span>
+              <span className="badge badge-primary" style={{ fontWeight: 700 }}>
+                Total Time: {result.total_processing_time ?? result.timing_ms.total_ms ?? 0}ms
+              </span>
             </div>
           )}
         </div>

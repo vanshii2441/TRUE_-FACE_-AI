@@ -42,9 +42,10 @@
 | **FAISS 1:N Search** | ✅ IMPLEMENTED | `IndexFlatIP` vector index with persistent JSON metadata for sub-millisecond matching |
 | **Recognition & Enrollment API** | ✅ IMPLEMENTED | `POST /api/v1/enroll`, `POST /api/v1/recognize`, `GET /api/v1/users`, `DELETE /api/v1/users/reset` |
 | **Liveness Detection (CNN)** | ✅ IMPLEMENTED | PyTorch `LivenessNet` passive anti-spoofing gating, classification, & score evaluation |
-| **Unit & Integration Tests** | ✅ IMPLEMENTED | 30 unit & integration tests covering detector, embedder, vector store, liveness, and API flows |
-| **Sub-500ms Pipeline** | ✅ VERIFIED | End-to-end detection, liveness check, 512d embedding, and FAISS 1:N search in ~80-120ms |
-| **Deepfake Detection (ViT)** | ❌ NOT IMPLEMENTED YET | Planned — Vision Transformer |
+| **Deepfake Detection (PyTorch CNN)** | ✅ IMPLEMENTED | PyTorch `DeepfakeNet` synthetic face detection layer integrated in core verification pipeline |
+| **Complete 6-Stage Pipeline** | ✅ IMPLEMENTED | Image/Camera → Detection → Liveness → Deepfake → Embedding → FAISS 1:N → Final Decision |
+| **Unit & Integration Tests** | ✅ IMPLEMENTED | 38 unit & integration tests covering detector, embedder, vector store, liveness, deepfake, and API flows |
+| **Sub-500ms Pipeline** | ✅ VERIFIED | End-to-end multi-layer AI pipeline execution in ~80-150ms |
 
 > **Note:** Only features marked ✅ are actually implemented and tested in this codebase.
 
@@ -280,14 +281,21 @@ Enroll a new face identity into the FAISS vector database.
 
 ### `POST /api/v1/recognize`
 
-Recognize an unknown face by searching against enrolled vectors (1:N search).
+Execute complete 6-stage face verification pipeline:
+`Image/Camera → Face Detection → Liveness Detection → Deepfake Detection → Face Embedding → FAISS 1:N Recognition → Final Authentication Result`
 
 **Request:** `multipart/form-data` with `file` field containing query image.
 
-**Response (200 - Match):**
+**Response (200 - Authenticated):**
 ```json
 {
-  "status": "MATCH",
+  "identity": "Jane Doe",
+  "similarity_score": 0.8942,
+  "liveness_score": 0.985,
+  "deepfake_probability": 0.032,
+  "final_decision": "AUTHENTICATED",
+  "total_processing_time": 75.1,
+  "status": "AUTHENTICATED",
   "is_authenticated": true,
   "matched_user": {
     "user_id": "USR001",
@@ -297,16 +305,33 @@ Recognize an unknown face by searching against enrolled vectors (1:N search).
     "is_match": true
   },
   "best_similarity": 0.8942,
+  "threshold": 0.60,
+  "is_live": true,
+  "liveness_status": "REAL",
+  "is_deepfake": false,
+  "deepfake_status": "REAL",
   "detected_faces_count": 1,
-  "candidates": [...],
   "timing_ms": {
     "detection_ms": 42.0,
+    "liveness_ms": 12.4,
+    "deepfake_ms": 10.2,
     "embedding_ms": 31.5,
     "search_ms": 1.2,
     "total_ms": 75.1
   }
 }
 ```
+
+**Pipeline Decision Codes (`final_decision`):**
+- `AUTHENTICATED`: Valid face, passed liveness & deepfake checks, similarity >= threshold match.
+- `UNKNOWN_USER`: Valid face, passed liveness & deepfake checks, similarity < threshold match.
+- `LIVENESS_FAILED`: Passive anti-spoofing gating failed (presentation attack detected).
+- `DEEPFAKE_SUSPECTED`: Deepfake probability exceeded threshold (synthetic face detected).
+- `NO_FACE`: Zero human faces located in uploaded image.
+- `LOW_CONFIDENCE`: Face detection confidence below threshold or multiple faces present.
+- `SYSTEM_ERROR`: System error encountered during processing.
+
+> **Model Weights Note:** Deepfake Detection model weights path is configurable via `DEEPFAKE_MODEL_PATH` (default `models/deepfake/best_model.pth`). If checkpoint file is not present, `DeepfakeDetector` operates in initialized architecture evaluation mode and logs a notice. Place custom trained weights at the configured path for production evaluation.
 
 ### `GET /api/v1/users`
 List all currently enrolled face profiles and vector database statistics.

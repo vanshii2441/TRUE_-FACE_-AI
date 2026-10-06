@@ -91,6 +91,27 @@ class Settings(BaseSettings):
         description="Toggle liveness anti-spoofing gating during face recognition",
     )
 
+    # --- Deepfake Detection ---
+    deepfake_threshold: float = Field(
+        default=0.50,
+        ge=0.0,
+        le=1.0,
+        description="Minimum probability threshold for classifying a face crop as DEEPFAKE (synthetic/AI generated)",
+    )
+    deepfake_model_path: str = Field(
+        default="models/deepfake/best_model.pth",
+        description="Path to saved PyTorch CNN deepfake model checkpoint",
+    )
+    deepfake_input_size: int = Field(
+        default=128,
+        gt=0,
+        description="Input square dimension (pixels) expected by the deepfake CNN model",
+    )
+    enable_deepfake_check: bool = Field(
+        default=True,
+        description="Toggle deepfake synthetic face detection gating during face recognition",
+    )
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

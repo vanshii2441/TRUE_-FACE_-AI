@@ -20,6 +20,9 @@ class EnrollResponse(BaseModel):
     liveness_score: float = Field(default=1.0, description="Liveness confidence score (0.0 to 1.0)")
     is_live: bool = Field(default=True, description="True if face passed liveness anti-spoofing check")
     liveness_status: str = Field(default="REAL", description="Liveness evaluation status ('REAL' or 'SPOOF')")
+    deepfake_probability: float = Field(default=0.0, description="Deepfake probability score (0.0 to 1.0)")
+    is_deepfake: bool = Field(default=False, description="True if face crop is classified as deepfake")
+    deepfake_status: str = Field(default="REAL", description="Deepfake classification status ('REAL' or 'DEEPFAKE')")
     timing_ms: dict[str, float] = Field(
         default_factory=dict,
         description="Execution latency breakdown in milliseconds",
@@ -37,12 +40,16 @@ class EnrollResponse(BaseModel):
                 "liveness_score": 0.985,
                 "is_live": True,
                 "liveness_status": "REAL",
+                "deepfake_probability": 0.05,
+                "is_deepfake": False,
+                "deepfake_status": "REAL",
                 "timing_ms": {
                     "detection_ms": 45.2,
                     "liveness_ms": 12.4,
+                    "deepfake_ms": 10.1,
                     "embedding_ms": 32.1,
                     "indexing_ms": 1.5,
-                    "total_ms": 91.2,
+                    "total_ms": 101.3,
                 },
             }
         }
@@ -64,17 +71,45 @@ class RecognizeCandidate(BaseModel):
 class RecognizeResponse(BaseModel):
     """Response returned after performing 1:N face recognition search."""
 
+    identity: str | None = Field(
+        default=None,
+        description="Matched identity display name or user ID, or None if unauthenticated",
+    )
+    similarity_score: float = Field(
+        default=0.0,
+        description="Highest cosine similarity score among vector database candidates",
+    )
+    liveness_score: float = Field(
+        default=1.0,
+        description="Probability that the presentation is a live genuine face (0.0 to 1.0)",
+    )
+    deepfake_probability: float = Field(
+        default=0.0,
+        description="Probability that the face image is a synthetic deepfake (0.0 to 1.0)",
+    )
+    final_decision: str = Field(
+        ...,
+        description=(
+            "Final pipeline decision: 'AUTHENTICATED', 'UNKNOWN_USER', 'LIVENESS_FAILED', "
+            "'DEEPFAKE_SUSPECTED', 'NO_FACE', 'LOW_CONFIDENCE', or 'SYSTEM_ERROR'"
+        ),
+    )
+    total_processing_time: float = Field(
+        ...,
+        description="Total processing time for the complete end-to-end pipeline in milliseconds",
+    )
+
     status: str = Field(
         ...,
-        description="Recognition outcome status: 'MATCH', 'NO_MATCH', 'SPOOF_DETECTED', 'NO_FACE_DETECTED', or 'MULTIPLE_FACES_DETECTED'",
+        description="Recognition outcome status (matches final_decision for backward compatibility)",
     )
     is_authenticated: bool = Field(
         ...,
-        description="True if a valid candidate matched above threshold and passed liveness check",
+        description="True if identity matched above threshold and passed liveness & deepfake checks",
     )
     matched_user: RecognizeCandidate | None = Field(
         default=None,
-        description="Top matching candidate if status is 'MATCH', else None",
+        description="Top matching candidate if status is 'AUTHENTICATED' / 'MATCH', else None",
     )
     best_similarity: float = Field(
         default=0.0,
@@ -84,10 +119,6 @@ class RecognizeResponse(BaseModel):
         ...,
         description="Cosine similarity decision threshold used for matching",
     )
-    liveness_score: float = Field(
-        default=1.0,
-        description="Probability that the presentation is a live genuine face (0.0 to 1.0)",
-    )
     is_live: bool = Field(
         default=True,
         description="True if face passed passive anti-spoofing check",
@@ -95,6 +126,14 @@ class RecognizeResponse(BaseModel):
     liveness_status: str = Field(
         default="REAL",
         description="Anti-spoofing classification status ('REAL' or 'SPOOF')",
+    )
+    is_deepfake: bool = Field(
+        default=False,
+        description="True if face image is classified as deepfake/synthetic",
+    )
+    deepfake_status: str = Field(
+        default="REAL",
+        description="Deepfake detection classification status ('REAL' or 'DEEPFAKE')",
     )
     top_candidates: list[RecognizeCandidate] = Field(
         default_factory=list,
@@ -112,7 +151,13 @@ class RecognizeResponse(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "status": "MATCH",
+                "identity": "Alice Smith",
+                "similarity_score": 0.8954,
+                "liveness_score": 0.985,
+                "deepfake_probability": 0.032,
+                "final_decision": "AUTHENTICATED",
+                "total_processing_time": 85.5,
+                "status": "AUTHENTICATED",
                 "is_authenticated": True,
                 "matched_user": {
                     "user_id": "USR001",
@@ -125,23 +170,19 @@ class RecognizeResponse(BaseModel):
                 },
                 "best_similarity": 0.8954,
                 "threshold": 0.60,
-                "top_candidates": [
-                    {
-                        "user_id": "USR001",
-                        "name": "Alice Smith",
-                        "similarity": 0.8954,
-                        "is_match": True,
-                        "faiss_id": 0,
-                        "enrolled_at": "2026-09-08T12:00:00+00:00",
-                        "extra_metadata": {},
-                    }
-                ],
+                "is_live": True,
+                "liveness_status": "REAL",
+                "is_deepfake": False,
+                "deepfake_status": "REAL",
+                "top_candidates": [],
                 "detected_faces_count": 1,
                 "timing_ms": {
                     "detection_ms": 42.1,
+                    "liveness_ms": 12.4,
+                    "deepfake_ms": 11.2,
                     "embedding_ms": 28.4,
                     "search_ms": 0.8,
-                    "total_ms": 71.3,
+                    "total_ms": 85.5,
                 },
             }
         }

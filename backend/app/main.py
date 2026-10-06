@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routes.detection import router as detection_router
 from app.routes.recognition import router as recognition_router
+from app.services.deepfake_detector import get_deepfake_detector
 from app.services.face_detector import get_face_detector
 from app.services.face_embedding import get_face_embedder
 from app.services.liveness_detector import get_liveness_detector
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ── Lifespan: pre-load models at startup ──────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load MTCNN, InceptionResnetV1, LivenessNet, and FAISS index at startup."""
+    """Load MTCNN, InceptionResnetV1, LivenessNet, DeepfakeNet, and FAISS index at startup."""
     logger.info("Starting %s v%s", settings.app_name, settings.app_version)
     logger.info("Loading face detection model...")
     get_face_detector()
@@ -38,6 +39,8 @@ async def lifespan(app: FastAPI):
     get_face_embedder()
     logger.info("Loading passive liveness anti-spoofing model...")
     get_liveness_detector()
+    logger.info("Loading deepfake detection model...")
+    get_deepfake_detector()
     logger.info("Loading FAISS vector store...")
     get_vector_store()
     logger.info("All AI models and vector store ready.")

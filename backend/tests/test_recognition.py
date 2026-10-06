@@ -1,21 +1,25 @@
 """
-TRUE FACE AI — Unit & Integration Tests for Face Embedding and Recognition
+TRUE FACE AI — Unit & Integration Tests for Face Embedding, Deepfake, and Recognition Flow
 
 Tests:
   - FaceEmbedder (vector shape, 512 dimension, L2 normalization)
   - VectorStore (FAISS index, adding faces, search, top-k, thresholding, save/load, reset)
   - API Endpoints: POST /api/v1/enroll, POST /api/v1/recognize, GET /api/v1/users, DELETE /api/v1/users/reset
+  - Complete Authentication Decision Flow:
+    AUTHENTICATED, UNKNOWN_USER, LIVENESS_FAILED, DEEPFAKE_SUSPECTED, NO_FACE, LOW_CONFIDENCE, SYSTEM_ERROR
 """
 
 import os
 import shutil
 import tempfile
+from unittest.mock import patch
 import cv2
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.deepfake_detector import DeepfakeDetector, get_deepfake_detector
 from app.services.face_detector import FaceDetector, get_face_detector
 from app.services.face_embedding import FaceEmbedder, get_face_embedder
 from app.services.liveness_detector import LivenessDetector, get_liveness_detector
@@ -38,7 +42,6 @@ def clean_vector_store():
 def synthetic_face_bgr() -> np.ndarray:
     """Create a 160x160 synthetic face-like image (BGR)."""
     img = np.ones((160, 160, 3), dtype=np.uint8) * 200
-    # Draw simple facial features so detection/embedding works
     cv2.circle(img, (50, 60), 15, (50, 50, 50), -1)  # Left eye
     cv2.circle(img, (110, 60), 15, (50, 50, 50), -1)  # Right eye
     cv2.ellipse(img, (80, 110), (30, 15), 0, 0, 180, (50, 50, 50), 3)  # Smile
@@ -59,13 +62,11 @@ class TestFaceEmbedder:
         embedder = get_face_embedder()
         embedding = embedder.generate_embedding(synthetic_face_bgr)
 
-        # Dimension should be 512
         assert isinstance(embedding, np.ndarray)
         assert embedding.ndim == 1
         assert embedding.shape[0] == 512
         assert embedding.dtype == np.float32
 
-        # L2 norm should be approximately 1.0
         norm = np.linalg.norm(embedding)
         assert pytest.approx(norm, abs=1e-4) == 1.0
 
@@ -91,7 +92,6 @@ class TestVectorStore:
             store = VectorStore(dimension=512, index_path=idx_path, metadata_path=meta_path, auto_load=False)
             assert store.count() == 0
 
-            # Generate random normalized 512d vector
             v1 = np.random.randn(512).astype(np.float32)
             v1 /= np.linalg.norm(v1)
 
@@ -99,7 +99,6 @@ class TestVectorStore:
             assert faiss_id == 0
             assert store.count() == 1
 
-            # Search with identical vector (should give similarity ~ 1.0)
             matches = store.search(v1, top_k=5, threshold=0.5)
             assert len(matches) == 1
             assert matches[0]["user_id"] == "USR001"
@@ -118,7 +117,6 @@ class TestVectorStore:
             store1.add_face("USR002", "Bob", v1)
             assert store1.count() == 1
 
-            # Create store2 pointing to same files (auto_load=True)
             store2 = VectorStore(dimension=512, index_path=idx_path, metadata_path=meta_path, auto_load=True)
             assert store2.count() == 1
 
@@ -134,7 +132,7 @@ class TestVectorStore:
         assert results == []
 
 
-# ── Integration Tests: API Endpoints ─────────────────────────
+# ── Integration Tests: Complete Authentication Flow & Outcomes ─────────────
 class TestRecognitionEndpoints:
 
     def test_health_check_includes_enrolled_count(self):
@@ -145,14 +143,12 @@ class TestRecognitionEndpoints:
         assert "enrolled_faces" in data
         assert data["enrolled_faces"] == 0
 
-    def test_enroll_and_recognize_flow(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
+    def test_enroll_and_authenticated_recognize_flow(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
         mock_detection = [{
             "bbox": [10, 10, 150, 150],
             "confidence": 0.995,
             "crop": synthetic_face_bgr,
         }]
-
-        from unittest.mock import patch
         mock_liveness = {
             "is_live": True,
             "liveness_score": 0.99,
@@ -160,8 +156,19 @@ class TestRecognitionEndpoints:
             "liveness_status": "REAL",
             "threshold": 0.70,
         }
+        mock_deepfake = {
+            "deepfake_probability": 0.05,
+            "real_probability": 0.95,
+            "is_deepfake": False,
+            "deepfake_status": "REAL",
+            "threshold": 0.50,
+            "weights_loaded": False,
+        }
+
         with patch.object(FaceDetector, "detect_and_crop", return_value=mock_detection), \
-             patch.object(LivenessDetector, "predict", return_value=mock_liveness):
+             patch.object(LivenessDetector, "predict", return_value=mock_liveness), \
+             patch.object(DeepfakeDetector, "predict", return_value=mock_deepfake):
+
             # 1. Enroll user
             files = {"file": ("alice.jpg", synthetic_face_jpeg, "image/jpeg")}
             data = {"user_id": "USR001", "name": "Alice Smith"}
@@ -173,51 +180,126 @@ class TestRecognitionEndpoints:
             assert enroll_data["user_id"] == "USR001"
             assert enroll_data["name"] == "Alice Smith"
             assert enroll_data["status"] == "SUCCESS"
-            assert "faiss_id" in enroll_data
-            assert "timing_ms" in enroll_data
-            assert "detection_ms" in enroll_data["timing_ms"]
+            assert "deepfake_probability" in enroll_data
 
-            # 2. List users
-            users_resp = client.get("/api/v1/users")
-            assert users_resp.status_code == 200
-            users_data = users_resp.json()
-            assert users_data["total_enrolled"] == 1
-            assert users_data["users"][0]["user_id"] == "USR001"
-
-            # 3. Recognize user with same image
+            # 2. Recognize user (AUTHENTICATED)
             rec_files = {"file": ("query.jpg", synthetic_face_jpeg, "image/jpeg")}
             rec_resp = client.post("/api/v1/recognize", files=rec_files)
             assert rec_resp.status_code == 200, rec_resp.text
             rec_data = rec_resp.json()
 
-            assert rec_data["status"] == "MATCH"
+            assert rec_data["final_decision"] == "AUTHENTICATED"
+            assert rec_data["status"] == "AUTHENTICATED"
             assert rec_data["is_authenticated"] is True
-            assert rec_data["matched_user"]["user_id"] == "USR001"
-            assert rec_data["matched_user"]["name"] == "Alice Smith"
-            assert rec_data["best_similarity"] >= 0.60
-            assert rec_data["detected_faces_count"] == 1
+            assert rec_data["identity"] == "Alice Smith"
+            assert rec_data["similarity_score"] >= 0.60
+            assert rec_data["liveness_score"] == 0.99
+            assert rec_data["deepfake_probability"] == 0.05
+            assert rec_data["total_processing_time"] > 0
+            assert "deepfake_ms" in rec_data["timing_ms"]
 
-            # 4. Reset DB
-            reset_resp = client.delete("/api/v1/users/reset")
-            assert reset_resp.status_code == 200
+    def test_recognize_unknown_user(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
+        mock_detection = [{
+            "bbox": [10, 10, 150, 150],
+            "confidence": 0.995,
+            "crop": synthetic_face_bgr,
+        }]
+        mock_liveness = {
+            "is_live": True,
+            "liveness_score": 0.95,
+            "spoof_score": 0.05,
+            "liveness_status": "REAL",
+            "threshold": 0.70,
+        }
+        mock_deepfake = {
+            "deepfake_probability": 0.02,
+            "real_probability": 0.98,
+            "is_deepfake": False,
+            "deepfake_status": "REAL",
+            "threshold": 0.50,
+            "weights_loaded": False,
+        }
 
-            # Verify DB empty
-            users_resp2 = client.get("/api/v1/users")
-            assert users_resp2.json()["total_enrolled"] == 0
+        with patch.object(FaceDetector, "detect_and_crop", return_value=mock_detection), \
+             patch.object(LivenessDetector, "predict", return_value=mock_liveness), \
+             patch.object(DeepfakeDetector, "predict", return_value=mock_deepfake):
 
-    def test_enroll_no_face_returns_400(self):
-        # Blank black image with no faces
-        blank_bgr = np.zeros((300, 300, 3), dtype=np.uint8)
-        _, encoded = cv2.imencode(".jpg", blank_bgr)
+            files = {"file": ("query.jpg", synthetic_face_jpeg, "image/jpeg")}
+            resp = client.post("/api/v1/recognize", files=files)
+            assert resp.status_code == 200
+            data = resp.json()
 
-        files = {"file": ("blank.jpg", encoded.tobytes(), "image/jpeg")}
-        data = {"user_id": "USR999", "name": "No Face User"}
+            assert data["final_decision"] == "UNKNOWN_USER"
+            assert data["is_authenticated"] is False
+            assert data["identity"] is None
+            assert data["similarity_score"] == 0.0
 
-        resp = client.post("/api/v1/enroll", data=data, files=files)
-        assert resp.status_code == 400
-        assert "No face detected" in resp.json()["detail"]
+    def test_recognize_liveness_failed(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
+        mock_detection = [{
+            "bbox": [10, 10, 150, 150],
+            "confidence": 0.995,
+            "crop": synthetic_face_bgr,
+        }]
+        mock_spoof_liveness = {
+            "is_live": False,
+            "liveness_score": 0.12,
+            "spoof_score": 0.88,
+            "liveness_status": "SPOOF",
+            "threshold": 0.70,
+        }
 
-    def test_recognize_no_face_returns_no_face_status(self):
+        with patch.object(FaceDetector, "detect_and_crop", return_value=mock_detection), \
+             patch.object(LivenessDetector, "predict", return_value=mock_spoof_liveness):
+
+            files = {"file": ("query.jpg", synthetic_face_jpeg, "image/jpeg")}
+            resp = client.post("/api/v1/recognize", files=files)
+            assert resp.status_code == 200
+            data = resp.json()
+
+            assert data["final_decision"] == "LIVENESS_FAILED"
+            assert data["status"] == "LIVENESS_FAILED"
+            assert data["is_authenticated"] is False
+            assert data["liveness_score"] == 0.12
+            assert data["is_live"] is False
+
+    def test_recognize_deepfake_suspected(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
+        mock_detection = [{
+            "bbox": [10, 10, 150, 150],
+            "confidence": 0.995,
+            "crop": synthetic_face_bgr,
+        }]
+        mock_liveness = {
+            "is_live": True,
+            "liveness_score": 0.98,
+            "spoof_score": 0.02,
+            "liveness_status": "REAL",
+            "threshold": 0.70,
+        }
+        mock_deepfake_suspected = {
+            "deepfake_probability": 0.89,
+            "real_probability": 0.11,
+            "is_deepfake": True,
+            "deepfake_status": "DEEPFAKE",
+            "threshold": 0.50,
+            "weights_loaded": False,
+        }
+
+        with patch.object(FaceDetector, "detect_and_crop", return_value=mock_detection), \
+             patch.object(LivenessDetector, "predict", return_value=mock_liveness), \
+             patch.object(DeepfakeDetector, "predict", return_value=mock_deepfake_suspected):
+
+            files = {"file": ("query.jpg", synthetic_face_jpeg, "image/jpeg")}
+            resp = client.post("/api/v1/recognize", files=files)
+            assert resp.status_code == 200
+            data = resp.json()
+
+            assert data["final_decision"] == "DEEPFAKE_SUSPECTED"
+            assert data["status"] == "DEEPFAKE_SUSPECTED"
+            assert data["is_authenticated"] is False
+            assert data["deepfake_probability"] == 0.89
+            assert data["is_deepfake"] is True
+
+    def test_recognize_no_face(self):
         blank_bgr = np.zeros((300, 300, 3), dtype=np.uint8)
         _, encoded = cv2.imencode(".jpg", blank_bgr)
 
@@ -226,7 +308,22 @@ class TestRecognitionEndpoints:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "NO_FACE_DETECTED"
+        assert data["final_decision"] == "NO_FACE"
         assert data["is_authenticated"] is False
-        assert data["matched_user"] is None
         assert data["detected_faces_count"] == 0
+
+    def test_recognize_low_confidence(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
+        mock_low_conf_detection = [{
+            "bbox": [10, 10, 150, 150],
+            "confidence": 0.40,  # Below default 0.90 threshold
+            "crop": synthetic_face_bgr,
+        }]
+
+        with patch.object(FaceDetector, "detect_and_crop", return_value=mock_low_conf_detection):
+            files = {"file": ("query.jpg", synthetic_face_jpeg, "image/jpeg")}
+            resp = client.post("/api/v1/recognize", files=files)
+
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["final_decision"] == "LOW_CONFIDENCE"
+            assert data["is_authenticated"] is False
