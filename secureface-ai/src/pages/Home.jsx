@@ -1,8 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { getAnalyticsOverview, getDetailedHealth } from '../services/api'
+import SecurityAlert from '../components/threat/SecurityAlert'
+import ThreatSources from '../components/threat/ThreatSources'
+import { alerts, threatSources } from '../data/threatData'
 
 function Home() {
+    const scrollToAnalytics = () => {
+    document.getElementById('dashboard-analytics')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }
   const [stats, setStats] = useState(null)
   const [health, setHealth] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -40,6 +49,24 @@ function Home() {
         <p>
           Real-time biometric security metrics, user enrollment analytics, AI model readiness matrix, and authentication performance indicators.
         </p>
+        <button
+  className="btn btn-secondary dashboard-scroll-btn"
+  onClick={scrollToAnalytics}
+  id="dashboard-scroll-analytics"
+>
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 5v14" />
+    <path d="m19 12-7 7-7-7" />
+  </svg>
+  Explore System Analytics
+</button>
       </div>
 
       {error && (
@@ -49,7 +76,9 @@ function Home() {
       )}
 
       {/* Primary Analytics Metric Cards */}
-      <div className="section-title">Biometric System Analytics Overview</div>
+      <div className="section-title" id="dashboard-analytics">
+  Biometric System Analytics Overview
+</div>
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
           Loading real-time system metrics...
@@ -140,6 +169,152 @@ function Home() {
         </div>
       )}
 
+            {/* Dashboard Security Insights */}
+      {stats && (
+        <>
+          <div className="section-title">Security & AI Insights</div>
+
+          <div className="dashboard-insights-grid">
+
+            {/* Security Posture */}
+            <div className="card dashboard-insight-card">
+              <div className="dashboard-insight-header">
+                <div>
+                  <div className="card-title">Security Posture</div>
+                  <div className="card-description">
+                    Current biometric protection level
+                  </div>
+                </div>
+
+                <span className="card-icon success">🛡️</span>
+              </div>
+
+              <div className="insight-status">
+                <span className="status-dot online" />
+                <strong>Protected</strong>
+              </div>
+
+              <div className="insight-progress">
+                <div
+                  className="insight-progress-fill"
+                  style={{ width: `${Math.min(stats.success_rate_percent, 100)}%` }}
+                />
+              </div>
+
+              <div className="insight-footer">
+                <span>Authentication reliability</span>
+                <strong>{stats.success_rate_percent}%</strong>
+              </div>
+            </div>
+
+            {/* Authentication Activity */}
+            <div className="card dashboard-insight-card">
+              <div className="dashboard-insight-header">
+                <div>
+                  <div className="card-title">Authentication Activity</div>
+                  <div className="card-description">
+                    Verification performance
+                  </div>
+                </div>
+
+                <span className="card-icon info">🔐</span>
+              </div>
+
+              <div className="activity-stats">
+                <div>
+                  <strong>{stats.successful_verifications}</strong>
+                  <span>Successful</span>
+                </div>
+
+                <div>
+                  <strong>{stats.total_verifications - stats.successful_verifications}</strong>
+                  <span>Failed</span>
+                </div>
+              </div>
+
+              <div className="insight-footer">
+                <span>Total verification attempts</span>
+                <strong>{stats.total_verifications}</strong>
+              </div>
+            </div>
+
+            {/* AI Pipeline */}
+            <div className="card dashboard-insight-card">
+              <div className="dashboard-insight-header">
+                <div>
+                  <div className="card-title">AI Security Pipeline</div>
+                  <div className="card-description">
+                    Multi-layer verification models
+                  </div>
+                </div>
+
+                <span className="card-icon primary">🤖</span>
+              </div>
+
+              <div className="pipeline-status-list">
+                <div>
+                  <span className="status-dot online" />
+                  <span>Face Detection</span>
+                  <strong>MTCNN</strong>
+                </div>
+
+                <div>
+                  <span className="status-dot online" />
+                  <span>Anti-Spoofing</span>
+                  <strong>LivenessNet</strong>
+                </div>
+
+                <div>
+                  <span className="status-dot online" />
+                  <span>Deepfake Analysis</span>
+                  <strong>DeepfakeNet</strong>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </>
+      )}
+
+      {/* Threat Intelligence */}
+<div className="section-title">
+  Threat Intelligence
+</div>
+
+<div className="dashboard-threat-grid">
+
+  {/* Top Threat Sources */}
+  <div className="card dashboard-threat-card">
+    <div className="card-header">
+      <div>
+        <div className="card-title">Top Threat Sources</div>
+        <div className="card-description">
+          Sources generating the highest number of security incidents
+        </div>
+      </div>
+      <span className="card-icon danger">⚠️</span>
+    </div>
+
+    <ThreatSources sources={threatSources} />
+  </div>
+
+  {/* Recent Security Alerts */}
+  <div className="card dashboard-threat-card">
+    <div className="card-header">
+      <div>
+        <div className="card-title">Recent Security Alerts</div>
+        <div className="card-description">
+          Latest detected threats and authentication incidents
+        </div>
+      </div>
+      <span className="card-icon warning">🔔</span>
+    </div>
+
+   <SecurityAlert alerts={alerts.slice(0, 5)} />
+  </div>
+
+</div>
+
       {/* Quick Actions */}
       <div className="section-title">Primary Navigation</div>
       <div className="quick-actions mb-24">
@@ -218,6 +393,28 @@ function Home() {
           </div>
         </div>
       )}
+            <button
+        className="dashboard-back-to-top"
+        onClick={() =>
+          window.scrollTo({
+            top: 0,
+            behavior: 'smooth',
+          })
+        }
+        aria-label="Back to top"
+        title="Back to top"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="m18 15-6-6-6 6" />
+        </svg>
+      </button>
     </div>
   )
 }
