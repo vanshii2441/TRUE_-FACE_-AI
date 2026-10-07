@@ -46,6 +46,9 @@ class PaginatedAuditLogsResponse(BaseModel):
 class DetailedHealthResponse(BaseModel):
     """Comprehensive system health and model status schema."""
     status: str = Field(..., description="Overall system health status ('ONLINE', 'DEGRADED', 'OFFLINE')")
+    overall_status: str = Field(default="ALL_SYSTEMS_OPERATIONAL", description="Human readable overall health state")
+    timestamp: str = Field(default="", description="ISO timestamp of health check")
+    uptime_seconds: float = Field(default=0.0, description="Server uptime in seconds")
     service: str = Field(..., description="Application name")
     version: str = Field(..., description="Application version")
     api_status: str = Field(default="ONLINE", description="API web server status")
@@ -55,6 +58,9 @@ class DetailedHealthResponse(BaseModel):
     face_embedding_model_status: str = Field(..., description="InceptionResnetV1 model status")
     liveness_model_status: str = Field(..., description="LivenessNet model status")
     deepfake_model_status: str = Field(..., description="DeepfakeNet model status")
+    components: dict[str, Any] = Field(default_factory=dict, description="Detailed component breakdown dict")
+    metrics: dict[str, Any] = Field(default_factory=dict, description="System diagnostics metrics dict")
+    events: list[dict[str, Any]] = Field(default_factory=list, description="Recent health audit events")
 
 
 class ThresholdConfigModel(BaseModel):

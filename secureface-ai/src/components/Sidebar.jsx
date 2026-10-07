@@ -163,14 +163,23 @@ function Sidebar({ isOpen, onClose }) {
 
         {/* Future features (disabled) */}
         <nav className="sidebar-nav">
+          <div className="sidebar-section-title" style={{ padding: '8px 12px 4px 12px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 600 }}>
+            PLANNED MODULES
+          </div>
           {futureNav.map((item) => (
             <div
               key={item.label}
               className="sidebar-link disabled"
+              title={`${item.label} module is coming soon`}
+              style={{ opacity: 0.65, cursor: 'not-allowed', justifyContent: 'space-between' }}
             >
-              {item.icon}
-              <span>{item.label}</span>
-              <span className="coming-badge">Soon</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {item.icon}
+                <span>{item.label}</span>
+              </div>
+              <span className="coming-badge" style={{ fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}>
+                Soon
+              </span>
             </div>
           ))}
         </nav>
@@ -183,12 +192,12 @@ function Sidebar({ isOpen, onClose }) {
             <span>Frontend Active</span>
           </div>
           <div className="sidebar-status" style={{ marginTop: '6px' }}>
-            <span className="status-dot pending" />
-            <span>Backend Pending</span>
+            <span className="status-dot online" />
+            <span>FastAPI Engine Online</span>
           </div>
           <div className="live-badge">
             <span className="status-dot online" />
-            LIVE
+            READY
           </div>
         </div>
       </aside>

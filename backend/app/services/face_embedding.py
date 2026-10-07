@@ -78,6 +78,11 @@ class FaceEmbedder:
 
         logger.info("InceptionResnetV1 embedding model initialized successfully.")
 
+    @property
+    def is_loaded(self) -> bool:
+        """Returns True if InceptionResnetV1 model is initialized."""
+        return self._model is not None
+
     def preprocess_face(self, face_bgr: np.ndarray) -> torch.Tensor:
         """
         Preprocess face image for InceptionResnetV1 model.

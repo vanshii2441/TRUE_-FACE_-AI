@@ -53,6 +53,18 @@ class DeepfakeDetector:
         self.is_weights_loaded = False
         self.load_weights()
 
+    @property
+    def is_loaded(self) -> bool:
+        """Returns True only if weights were loaded from disk checkpoint."""
+        return self.is_weights_loaded
+
+    @property
+    def load_reason(self) -> str:
+        """Returns human readable status reason for model readiness."""
+        if self.is_weights_loaded:
+            return "Pre-trained DeepfakeNet CNN weights loaded successfully."
+        return f"Model weights checkpoint not found at '{self.model_path}'. Operating in initialized architecture mode."
+
     def load_weights(self) -> bool:
         """
         Load model weights from checkpoint path if available.

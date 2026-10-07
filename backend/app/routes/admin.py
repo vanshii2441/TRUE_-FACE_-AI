@@ -168,6 +168,9 @@ async def get_audit_logs(
     )
 
 
+import time
+START_TIME = time.time()
+
 @router.get(
     "/health/detailed",
     response_model=DetailedHealthResponse,
@@ -175,58 +178,147 @@ async def get_audit_logs(
     description="Inspect real load state and readiness of all AI models, FAISS vector index, and server API.",
 )
 async def get_detailed_health() -> DetailedHealthResponse:
-    det_status = "ONLINE"
-    emb_status = "ONLINE"
-    liv_status = "ONLINE"
-    df_status = "ONLINE"
-    db_status = "ONLINE"
+    from app.services.health_event_store import get_health_event_store
+    event_store = get_health_event_store()
 
-    # Check detector
+    det_status = "ONLINE"
+    det_reason = None
+    det_device = "cpu"
     try:
         det = get_face_detector()
+        det_device = str(getattr(det, "device", "cpu"))
         if not det.is_loaded:
             det_status = "MODEL_UNAVAILABLE"
-    except Exception:
+            det_reason = "MTCNN face detector failed to initialize."
+    except Exception as e:
         det_status = "MODEL_UNAVAILABLE"
+        det_reason = f"MTCNN initialization error: {e}"
 
-    # Check embedder
+    emb_status = "ONLINE"
+    emb_reason = None
+    emb_pretrained = "vggface2"
     try:
         emb = get_face_embedder()
+        emb_pretrained = getattr(emb, "pretrained", "vggface2")
         if not emb.is_loaded:
             emb_status = "MODEL_UNAVAILABLE"
-    except Exception:
+            emb_reason = "InceptionResNetV1 embedding model failed to initialize."
+    except Exception as e:
         emb_status = "MODEL_UNAVAILABLE"
+        emb_reason = f"InceptionResNetV1 initialization error: {e}"
 
-    # Check liveness
+    liv_status = "ONLINE"
+    liv_reason = None
     try:
         liv = get_liveness_detector()
         if not liv.is_loaded:
             liv_status = "MODEL_UNAVAILABLE"
-    except Exception:
+            liv_reason = getattr(
+                liv,
+                "load_reason",
+                f"Model weights checkpoint file not found at '{settings.liveness_model_path}'.",
+            )
+    except Exception as e:
         liv_status = "MODEL_UNAVAILABLE"
+        liv_reason = f"LivenessNet initialization error: {e}"
 
-    # Check deepfake
+    df_status = "ONLINE"
+    df_reason = None
     try:
         df = get_deepfake_detector()
         if not df.is_loaded:
             df_status = "MODEL_UNAVAILABLE"
-    except Exception:
+            df_reason = getattr(
+                df,
+                "load_reason",
+                f"Model weights checkpoint file not found at '{settings.deepfake_model_path}'.",
+            )
+    except Exception as e:
         df_status = "MODEL_UNAVAILABLE"
+        df_reason = f"DeepfakeNet initialization error: {e}"
 
     # Check FAISS vector store
     store = get_vector_store()
     count = store.count()
+    db_status = "ONLINE"
+    db_reason = None
 
     statuses = [det_status, emb_status, liv_status, df_status, db_status]
     if all(s == "ONLINE" for s in statuses):
-        overall = "ONLINE"
-    elif any(s == "ONLINE" for s in statuses):
-        overall = "DEGRADED"
+        overall_status = "ALL_SYSTEMS_OPERATIONAL"
+        legacy_status = "ONLINE"
+    elif det_status == "ONLINE" and emb_status == "ONLINE" and db_status == "ONLINE":
+        overall_status = "PARTIALLY_OPERATIONAL"
+        legacy_status = "DEGRADED"
     else:
-        overall = "OFFLINE"
+        overall_status = "SYSTEM_DEGRADED"
+        legacy_status = "OFFLINE"
+
+    uptime_sec = round(time.time() - START_TIME, 1)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    components = {
+        "api": {
+            "name": "FastAPI Web Server",
+            "status": "ONLINE",
+            "metric": "HTTP REST Server",
+            "details": f"Listening on {settings.host}:{settings.port}",
+            "reason": None,
+        },
+        "faiss": {
+            "name": "FAISS Vector Store",
+            "status": db_status,
+            "metric": f"{count} enrolled vectors",
+            "details": f"IndexFlatIP {store.dimension}-dimensional vector index",
+            "reason": db_reason,
+        },
+        "face_detection": {
+            "name": "MTCNN Face Detector",
+            "status": det_status,
+            "metric": f"Device: {det_device} | Min: {settings.min_face_size}px",
+            "details": "PyTorch MTCNN multi-stage face detection network",
+            "reason": det_reason,
+        },
+        "face_embedding": {
+            "name": "InceptionResNetV1 ArcFace",
+            "status": emb_status,
+            "metric": "512-d L2 vector",
+            "details": f"ArcFace model pretrained on {emb_pretrained}",
+            "reason": emb_reason,
+        },
+        "liveness": {
+            "name": "LivenessNet Anti-Spoofing",
+            "status": liv_status,
+            "metric": "Pre-trained Weights" if liv_status == "ONLINE" else "Fallback Mode",
+            "details": "LivenessNet CNN passive anti-spoofing classifier",
+            "reason": liv_reason,
+        },
+        "deepfake": {
+            "name": "DeepfakeNet Synthetic Detector",
+            "status": df_status,
+            "metric": "Pre-trained Weights" if df_status == "ONLINE" else "Fallback Mode",
+            "details": "DeepfakeNet CNN synthetic face analysis layer",
+            "reason": df_reason,
+        },
+    }
+
+    metrics = {
+        "enrolled_users": count,
+        "total_models": 4,
+        "loaded_models": sum(1 for s in [det_status, emb_status, liv_status, df_status] if s == "ONLINE"),
+        "backend_version": settings.app_version,
+        "frontend_version": "1.0.0",
+        "uptime_seconds": uptime_sec,
+    }
+
+    # Fetch recorded events or seed model status events if event store is fresh
+    events = event_store.get_events(limit=15)
 
     return DetailedHealthResponse(
-        status=overall,
+        status=legacy_status,
+        overall_status=overall_status,
+        timestamp=now_iso,
+        uptime_seconds=uptime_sec,
         service=settings.app_name,
         version=settings.app_version,
         api_status="ONLINE",
@@ -236,6 +328,9 @@ async def get_detailed_health() -> DetailedHealthResponse:
         face_embedding_model_status=emb_status,
         liveness_model_status=liv_status,
         deepfake_model_status=df_status,
+        components=components,
+        metrics=metrics,
+        events=events,
     )
 
 

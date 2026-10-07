@@ -87,6 +87,11 @@ class FaceDetector:
 
         logger.info("MTCNN face detector initialized successfully.")
 
+    @property
+    def is_loaded(self) -> bool:
+        """Returns True if MTCNN model is initialized."""
+        return self._mtcnn is not None
+
     def detect(self, image_bgr: np.ndarray) -> list[dict[str, Any]]:
         """
         Detect all faces in an image.
