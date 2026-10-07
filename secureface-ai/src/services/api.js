@@ -4,7 +4,7 @@
  * Connects React Frontend to FastAPI AI backend endpoints.
  */
 
-const API_BASE_URL = 'http://localhost:8000'
+const API_BASE_URL = 'http://127.0.0.1:8000'
 
 /**
  * Register/enroll a user face with 512d ArcFace embedding and FAISS vector indexing.

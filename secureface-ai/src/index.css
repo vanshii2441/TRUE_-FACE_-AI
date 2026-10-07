@@ -3575,3 +3575,19 @@ ul, ol {
     padding: 18px;
   }
 }
+.dashboard-threat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.dashboard-threat-grid > * {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .dashboard-threat-grid {
+    grid-template-columns: 1fr;
+  }
+}

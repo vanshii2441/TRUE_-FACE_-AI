@@ -271,6 +271,8 @@ function Home() {
                 </div>
               </div>
             </div>
+          
+
 
           </div>
         </>
@@ -283,35 +285,15 @@ function Home() {
 
 <div className="dashboard-threat-grid">
 
-  {/* Top Threat Sources */}
-  <div className="card dashboard-threat-card">
-    <div className="card-header">
-      <div>
-        <div className="card-title">Top Threat Sources</div>
-        <div className="card-description">
-          Sources generating the highest number of security incidents
-        </div>
-      </div>
-      <span className="card-icon danger">⚠️</span>
-    </div>
+  <ThreatSources
+    sources={threatSources}
+  />
 
-    <ThreatSources sources={threatSources} />
-  </div>
+  <SecurityAlert
+    alerts={alerts.slice(0, 5)}
+  />
 
-  {/* Recent Security Alerts */}
-  <div className="card dashboard-threat-card">
-    <div className="card-header">
-      <div>
-        <div className="card-title">Recent Security Alerts</div>
-        <div className="card-description">
-          Latest detected threats and authentication incidents
-        </div>
-      </div>
-      <span className="card-icon warning">🔔</span>
-    </div>
 
-   <SecurityAlert alerts={alerts.slice(0, 5)} />
-  </div>
 
 </div>
 
