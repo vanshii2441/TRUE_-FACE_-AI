@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { getUsers, resetUsers, deleteUser } from '../services/api'
+import { Link } from 'react-router-dom'
+import { getUsers, resetUsers } from '../services/api'
 
 function formatDate(isoString) {
   if (!isoString) return 'N/A'
+
   try {
     return new Date(isoString).toLocaleDateString('en-IN', {
       year: 'numeric',
@@ -21,23 +23,21 @@ function Users() {
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-
-  const [searchTerm, setSearchTerm] = useState('')
   const [resetting, setResetting] = useState(false)
-  const [deletingId, setDeletingId] = useState(null)
 
-  // Selected user for view modal
-  const [selectedUser, setSelectedUser] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('All')
 
   const fetchUsers = async () => {
     setLoading(true)
     setError(null)
+
     try {
       const data = await getUsers()
       setUsers(data.users || [])
       setTotalCount(data.total_enrolled || 0)
     } catch (err) {
-      setError(err.message || 'Failed to fetch enrolled user records.')
+      setError(err.message || 'Failed to fetch enrolled users.')
     } finally {
       setLoading(false)
     }
@@ -47,349 +47,482 @@ function Users() {
     fetchUsers()
   }, [])
 
-  const handleDeleteUser = async (user) => {
-    const confirmMsg = `Are you sure you want to delete user '${user.user_id}' (${user.name}) from the FAISS database?\n\nThis will remove their biometric identity record.`
-    if (!window.confirm(confirmMsg)) {
-      return
-    }
-
-    setDeletingId(user.user_id)
-    try {
-      await deleteUser(user.user_id)
-      await fetchUsers()
-      if (selectedUser?.user_id === user.user_id) {
-        setSelectedUser(null)
-      }
-    } catch (err) {
-      alert('Failed to delete user: ' + (err.message || 'Server error'))
-    } finally {
-      setDeletingId(null)
-    }
-  }
-
-  const handleResetDB = async () => {
-    if (!window.confirm('WARNING: Are you sure you want to reset the FAISS vector database?\n\nThis will delete ALL enrolled face vectors and reset the index.')) {
+  const handleReset = async () => {
+    if (
+      !window.confirm(
+        'Are you sure you want to reset the FAISS vector database? All enrolled face vectors will be deleted.'
+      )
+    ) {
       return
     }
 
     setResetting(true)
+
     try {
       await resetUsers()
       await fetchUsers()
-      setSelectedUser(null)
     } catch (err) {
-      alert('Failed to reset vector store: ' + err.message)
+      alert('Failed to reset vector database: ' + err.message)
     } finally {
       setResetting(false)
     }
   }
 
-  // Filter users by search term
-  const filteredUsers = users.filter((u) => {
-    const term = searchTerm.toLowerCase().trim()
-    if (!term) return true
-    const nameMatch = (u.name || '').toLowerCase().includes(term)
-    const idMatch = (u.user_id || '').toLowerCase().includes(term)
-    const emailMatch = (u.extra_metadata?.email || '').toLowerCase().includes(term)
-    return nameMatch || idMatch || emailMatch
+  const filteredUsers = users.filter((user) => {
+    const query = searchQuery.toLowerCase().trim()
+
+    const matchesSearch =
+      !query ||
+      String(user.name || '').toLowerCase().includes(query) ||
+      String(user.user_id || '').toLowerCase().includes(query) ||
+      String(user.faiss_id || '').toLowerCase().includes(query)
+
+    const matchesStatus =
+      statusFilter === 'All' || statusFilter === 'Active'
+
+    return matchesSearch && matchesStatus
   })
 
   return (
-    <div className="animate-in">
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-        <div>
-          <h1>User Identity Management</h1>
-          <p>
-            Manage all identities enrolled in the FAISS 1:N vector database. Search, view audit details, or delete identity records.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn btn-secondary btn-sm" onClick={fetchUsers} disabled={loading}>
-            🔄 Refresh List
-          </button>
-          <button
-            className="btn btn-danger btn-sm"
-            onClick={handleResetDB}
-            disabled={resetting || users.length === 0}
-            style={{ background: '#ef4444', color: '#fff' }}
-          >
-            {resetting ? 'Resetting Index...' : 'Clear All Users'}
-          </button>
+    <div className="animate-in users-page">
+
+      {/* Page Header */}
+      <div className="page-header users-page-header">
+        <div className="users-header-content">
+          <div>
+            <h1>
+              <span className="gradient-text">Registered Users</span>
+            </h1>
+
+            <p>
+              Manage all identities enrolled in the FAISS 1:N vector database.
+              Search, view identity records, or reset the enrolled vector index.
+            </p>
+          </div>
+
+          <div className="users-header-actions">
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={fetchUsers}
+              disabled={loading}
+              id="refresh-users-btn"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+                <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+              </svg>
+              {loading ? 'Refreshing...' : 'Refresh'}
+            </button>
+
+            <Link
+              to="/register"
+              className="btn btn-primary btn-sm"
+              id="register-user-btn"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="9" cy="7" r="4" />
+                <path d="M17 11v6" />
+                <path d="M14 14h6" />
+                <path d="M3 21v-2a4 4 0 0 1 4-4h4" />
+              </svg>
+              Register User
+            </Link>
+
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={handleReset}
+              disabled={resetting || users.length === 0}
+              id="reset-vector-db-btn"
+            >
+              {resetting ? 'Resetting...' : 'Reset Vector DB'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Stats Summary Cards */}
+      {/* Stats Row */}
       <div className="grid-3 mb-24">
+
+        {/* Total Users */}
         <div className="stat-card animate-in animate-delay-1">
           <div className="card-icon primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </div>
-          <div className="stat-info">
-            <div className="stat-label">Enrolled Identifiers</div>
-            <div className="stat-value">{totalCount}</div>
-          </div>
-        </div>
-
-        <div className="stat-card animate-in animate-delay-2">
-          <div className="card-icon success">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-          </div>
-          <div className="stat-info">
-            <div className="stat-label">FAISS 1:N Search</div>
-            <div className="stat-value">512d ArcFace</div>
-          </div>
-        </div>
-
-        <div className="stat-card animate-in animate-delay-3">
-          <div className="card-icon warning">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          </div>
-          <div className="stat-info">
-            <div className="stat-label">Anti-Spoofing Status</div>
-            <div className="stat-value" style={{ color: '#10b981' }}>Active</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter & Search Bar */}
-      <div className="card mb-24" style={{ padding: '16px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="🔍 Search users by Name, User ID, or Email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ paddingLeft: '36px', height: '40px' }}
-            />
             <svg
-              width="16"
-              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
-              style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-muted)' }}
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3.87-4" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
           </div>
 
-          <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-            Showing {filteredUsers.length} of {totalCount} enrolled records
+          <div className="stat-info">
+            <div className="stat-label">Registered Identities</div>
+            <div className="stat-value">{totalCount}</div>
+          </div>
+        </div>
+
+        {/* Embedding Index */}
+        <div className="stat-card animate-in animate-delay-2">
+          <div className="card-icon success">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 2v20" />
+              <path d="M2 12h20" />
+              <path d="M4.93 4.93l14.14 14.14" />
+              <path d="M19.07 4.93L4.93 19.07" />
+            </svg>
+          </div>
+
+          <div className="stat-info">
+            <div className="stat-label">Embedding Index</div>
+            <div className="stat-value">512-D</div>
+          </div>
+        </div>
+
+        {/* Anti Spoofing */}
+        <div className="stat-card animate-in animate-delay-3">
+          <div className="card-icon warning">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          </div>
+
+          <div className="stat-info">
+            <div className="stat-label">Anti-Spoofing</div>
+            <div className="stat-value users-active-value">
+              Active
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Users Table */}
-      {loading ? (
-        <div className="card" style={{ padding: '36px', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Loading identity records from FAISS vector store...
-        </div>
-      ) : error ? (
-        <div className="card" style={{ padding: '24px', color: '#ef4444', background: 'rgba(239,68,68,0.1)' }}>
-          ⚠️ {error}
-        </div>
-      ) : filteredUsers.length === 0 ? (
-        <div className="card" style={{ padding: '48px', textAlign: 'center' }}>
-          <p style={{ fontSize: 'var(--font-md)', color: 'var(--text-secondary)', fontWeight: 500 }}>
-            {searchTerm ? `No users matching "${searchTerm}" found.` : 'No enrolled users found in the FAISS database.'}
-          </p>
-          <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: '6px' }}>
-            Go to the "Register User" page to enroll identities with face photos.
-          </p>
-        </div>
-      ) : (
-        <div className="table-container animate-in animate-delay-2" id="users-table">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>FAISS ID</th>
-                <th>User ID</th>
-                <th>Full Name</th>
-                <th>Email / Contact</th>
-                <th>Status</th>
-                <th>Recognition Status</th>
-                <th>Enrolled Date</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user) => (
-                <tr key={user.faiss_id ?? user.user_id}>
-                  <td>
-                    <span style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>
-                      #{user.faiss_id}
-                    </span>
-                  </td>
-                  <td>
-                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)' }}>
-                      {user.user_id}
-                    </span>
-                  </td>
-                  <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                    {user.name}
-                  </td>
-                  <td style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-                    {user.extra_metadata?.email || 'N/A'}
-                  </td>
-                  <td>
-                    <span className="badge badge-success">
-                      <span className="status-dot online" style={{ width: '6px', height: '6px' }} />
-                      Enrolled & Active
-                    </span>
-                  </td>
-                  <td>
-                    <span className="badge badge-primary" style={{ fontSize: '11px' }}>
-                      Ready for 1:N Match
-                    </span>
-                  </td>
-                  <td style={{ fontSize: 'var(--font-xs)' }}>{formatDate(user.enrolled_at)}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '6px' }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setSelectedUser(user)}
-                        style={{ padding: '4px 10px', fontSize: '11px' }}
-                      >
-                        View Details
-                      </button>
-                      <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleDeleteUser(user)}
-                        disabled={deletingId === user.user_id}
-                        style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', padding: '4px 10px', fontSize: '11px' }}
-                      >
-                        {deletingId === user.user_id ? 'Deleting...' : 'Delete'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Identity Database Section */}
+      <section className="users-database-section">
 
-      {/* User Details Modal */}
-      {selectedUser && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '20px',
-          }}
-          onClick={() => setSelectedUser(null)}
-        >
-          <div
-            className="card animate-in"
-            style={{ width: '100%', maxWidth: '520px', background: 'var(--bg-card)', boxShadow: '0 20px 50px rgba(0,0,0,0.3)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="card-header" style={{ justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div className="card-icon primary">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                </div>
-                <span className="card-title">Enrolled User Profile</span>
-              </div>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => setSelectedUser(null)}
-                style={{ padding: '4px 8px' }}
-              >
-                ✕
-              </button>
+        <div className="users-section-header">
+          <div>
+            <div className="section-title">
+              Identity Database
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-secondary)', padding: '16px', borderRadius: '10px', marginBottom: '16px' }}>
-              <div>
-                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Full Display Name</span>
-                <p style={{ fontSize: 'var(--font-md)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-                  {selectedUser.name}
-                </p>
-              </div>
+            <p className="users-section-subtitle">
+              Enrolled biometric identities available for 1:N facial matching.
+            </p>
+          </div>
 
-              <div>
-                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>User ID</span>
-                <p style={{ fontSize: 'var(--font-md)', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace', margin: 0 }}>
-                  {selectedUser.user_id}
-                </p>
-              </div>
+          {!loading && !error && (
+            <div className="users-record-count">
+              <span className="status-dot online" />
+              Showing {filteredUsers.length} of {users.length} records
+            </div>
+          )}
+        </div>
 
-              <div>
-                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>FAISS Vector Slot</span>
-                <p style={{ fontSize: 'var(--font-md)', fontWeight: 700, color: '#10b981', fontFamily: 'monospace', margin: 0 }}>
-                  Index #{selectedUser.faiss_id}
-                </p>
-              </div>
+        {/* Search & Filter */}
+        {!loading && !error && users.length > 0 && (
+          <div className="users-controls card">
 
-              <div>
-                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Email Contact</span>
-                <p style={{ fontSize: 'var(--font-sm)', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                  {selectedUser.extra_metadata?.email || 'None Provided'}
-                </p>
-              </div>
+            <div className="users-search-box">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-4-4" />
+              </svg>
 
-              <div>
-                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Enrollment Date</span>
-                <p style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-secondary)', margin: 0 }}>
-                  {formatDate(selectedUser.enrolled_at)}
-                </p>
-              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, User ID, or FAISS ID..."
+                aria-label="Search registered users"
+                id="users-search"
+              />
 
-              <div>
-                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Biometric Security</span>
-                <p style={{ fontSize: 'var(--font-xs)', fontWeight: 700, color: '#10b981', margin: 0 }}>
-                  512d ArcFace Verified
-                </p>
-              </div>
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="users-search-clear"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              )}
             </div>
 
-            <div style={{ padding: '12px', background: 'rgba(59,130,246,0.08)', borderRadius: '8px', border: '1px solid rgba(59,130,246,0.2)', fontSize: 'var(--font-xs)', color: 'var(--text-secondary)' }}>
-              🔒 <strong>Security Guarantee:</strong> Raw facial embeddings and 512-dimensional vector floats are stored securely inside the FAISS index engine and never exposed directly in frontend API payloads.
-            </div>
+            <div className="users-filter-box">
+              <label htmlFor="users-status-filter">
+                Status
+              </label>
 
-            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button
-                className="btn btn-danger btn-sm"
-                onClick={() => handleDeleteUser(selectedUser)}
-                style={{ background: '#ef4444', color: '#fff' }}
+              <select
+                id="users-status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
               >
-                Delete Identity Record
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => setSelectedUser(null)}
-              >
-                Close
-              </button>
+                <option value="All">All Users</option>
+                <option value="Active">Active</option>
+              </select>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="card users-state-card">
+            <div className="users-state-icon loading">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M12 2v4" />
+                <path d="M12 18v4" />
+                <path d="m4.93 4.93 2.83 2.83" />
+                <path d="m16.24 16.24 2.83 2.83" />
+                <path d="M2 12h4" />
+                <path d="M18 12h4" />
+              </svg>
+            </div>
+
+            <h3>Loading Identity Database</h3>
+
+            <p>
+              Fetching enrolled user records from the FastAPI backend...
+            </p>
+          </div>
+        )}
+
+        {/* Error */}
+        {!loading && error && (
+          <div className="card users-state-card users-error-card">
+            <div className="users-state-icon error">
+              ⚠️
+            </div>
+
+            <h3>Unable to Load Users</h3>
+
+            <p>{error}</p>
+
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={fetchUsers}
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* Empty Database */}
+        {!loading && !error && users.length === 0 && (
+          <div className="card users-empty-state">
+
+            <div className="users-empty-visual">
+              <div className="users-empty-ring ring-one" />
+              <div className="users-empty-ring ring-two" />
+
+              <div className="users-empty-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M3 21v-2a4 4 0 0 1 4-4h4" />
+                  <path d="M17 11v6" />
+                  <path d="M14 14h6" />
+                </svg>
+              </div>
+            </div>
+
+            <div className="users-empty-content">
+              <span className="badge badge-neutral">
+                No Identities Enrolled
+              </span>
+
+              <h3>Your identity database is empty</h3>
+
+              <p>
+                Register a user's face to generate a biometric embedding
+                and add the identity to the FAISS 1:N recognition index.
+              </p>
+
+              <Link
+                to="/register"
+                className="btn btn-primary"
+                id="empty-register-user-btn"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M17 11v6" />
+                  <path d="M14 14h6" />
+                  <path d="M3 21v-2a4 4 0 0 1 4-4h4" />
+                </svg>
+                Register First User
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* No Search Results */}
+        {!loading &&
+          !error &&
+          users.length > 0 &&
+          filteredUsers.length === 0 && (
+            <div className="card users-state-card">
+              <div className="users-state-icon">
+                🔎
+              </div>
+
+              <h3>No Matching Users</h3>
+
+              <p>
+                No registered identity matches your current search or filter.
+              </p>
+
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setSearchQuery('')
+                  setStatusFilter('All')
+                }}
+              >
+                Clear Filters
+              </button>
+            </div>
+          )}
+
+        {/* Users Table */}
+        {!loading &&
+          !error &&
+          filteredUsers.length > 0 && (
+            <div
+              className="table-container animate-in animate-delay-2"
+              id="users-table"
+            >
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>FAISS ID</th>
+                    <th>User ID</th>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Enrolled Timestamp</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {filteredUsers.map((user) => (
+                    <tr
+                      key={user.faiss_id || user.user_id}
+                    >
+                      <td>
+                        <span
+                          style={{
+                            fontFamily: 'monospace',
+                            color: 'var(--text-muted)',
+                          }}
+                        >
+                          #{user.faiss_id}
+                        </span>
+                      </td>
+
+                      <td>
+                        <span
+                          style={{
+                            fontFamily: 'monospace',
+                            fontWeight: 600,
+                            color: 'var(--primary)',
+                          }}
+                        >
+                          {user.user_id}
+                        </span>
+                      </td>
+
+                      <td
+                        style={{
+                          color: 'var(--text-primary)',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {user.name}
+                      </td>
+
+                      <td>
+                        <span className="badge badge-success">
+                          <span
+                            className="status-dot online"
+                            style={{
+                              width: '6px',
+                              height: '6px',
+                            }}
+                          />
+                          Enrolled & Active
+                        </span>
+                      </td>
+
+                      <td>
+                        {formatDate(user.enrolled_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+      </section>
     </div>
   )
 }
