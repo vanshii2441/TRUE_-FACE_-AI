@@ -107,4 +107,24 @@ export async function detectFace(formData) {
   }
 }
 
-export default { registerUser, recognizeFace, getUsers, resetUsers, detectFace }
+/**
+ * Delete a user identity record from FAISS database.
+ * DELETE /api/v1/users/{user_id}
+ */
+export async function deleteUser(userId) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to delete user record')
+    }
+    return data
+  } catch (error) {
+    console.error('Error deleting user:', error)
+    throw error
+  }
+}
+
+export default { registerUser, recognizeFace, getUsers, resetUsers, deleteUser, detectFace }

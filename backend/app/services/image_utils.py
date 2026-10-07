@@ -7,6 +7,7 @@ All image operations use OpenCV (BGR) internally and convert as needed.
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
@@ -226,3 +227,90 @@ def save_image(image: np.ndarray, output_path: str | Path) -> Path:
     cv2.imwrite(str(path), image)
     logger.info("Image saved to %s", path)
     return path
+
+
+def assess_face_quality(
+    image_bgr: np.ndarray,
+    crop_bgr: np.ndarray | None = None,
+    blur_threshold: float = 30.0,
+    min_size: int = 40,
+) -> dict[str, Any]:
+    """
+    Evaluate face image quality metrics including blur (Laplacian variance),
+    crop resolution, and brightness levels.
+
+    Args:
+        image_bgr: Full image array (BGR format).
+        crop_bgr: Cropped face image array (BGR format). If None, image_bgr is evaluated.
+        blur_threshold: Minimum Laplacian variance score for image sharpness.
+        min_size: Minimum width and height of face crop in pixels.
+
+    Returns:
+        dict containing:
+            - is_quality_passed (bool)
+            - quality_score (float 0.0-1.0)
+            - blur_score (float)
+            - is_blurry (bool)
+            - brightness (float)
+            - width (int)
+            - height (int)
+            - reason (str)
+    """
+    target = crop_bgr if (crop_bgr is not None and crop_bgr.size > 0) else image_bgr
+    if target is None or target.size == 0:
+        return {
+            "is_quality_passed": False,
+            "quality_score": 0.0,
+            "blur_score": 0.0,
+            "is_blurry": True,
+            "brightness": 0.0,
+            "width": 0,
+            "height": 0,
+            "reason": "Empty image crop provided for quality check.",
+        }
+
+    h, w = target.shape[:2]
+    gray = cv2.cvtColor(target, cv2.COLOR_BGR2GRAY)
+
+    # Blur detection via Laplacian variance
+    blur_score = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    is_blurry = blur_score < blur_threshold
+
+    # Brightness (mean pixel value)
+    brightness = float(np.mean(gray))
+    is_extreme_lighting = brightness < 15.0 or brightness > 245.0
+
+    # Dimension check
+    is_too_small = (w < min_size) or (h < min_size)
+
+    reasons = []
+    if is_blurry:
+        reasons.append(
+            f"Image is too blurry (blur score {blur_score:.1f} < threshold {blur_threshold:.1f})"
+        )
+    if is_too_small:
+        reasons.append(
+            f"Face resolution ({w}x{h}px) is below minimum ({min_size}x{min_size}px)"
+        )
+    if is_extreme_lighting:
+        reasons.append(f"Suboptimal illumination (brightness level: {brightness:.1f})")
+
+    is_passed = (not is_blurry) and (not is_too_small) and (not is_extreme_lighting)
+
+    # Heuristic quality score between 0.0 and 1.0
+    norm_blur = min(1.0, blur_score / 150.0)
+    norm_size = min(1.0, min(w, h) / 120.0)
+    norm_light = 1.0 - (abs(brightness - 128.0) / 128.0)
+    quality_score = round(max(0.0, min(1.0, norm_blur * 0.5 + norm_size * 0.3 + norm_light * 0.2)), 4)
+
+    return {
+        "is_quality_passed": is_passed,
+        "quality_score": quality_score,
+        "blur_score": round(blur_score, 2),
+        "is_blurry": is_blurry,
+        "brightness": round(brightness, 2),
+        "width": w,
+        "height": h,
+        "reason": "; ".join(reasons) if reasons else "Face image passed quality verification.",
+    }
+

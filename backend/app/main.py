@@ -7,8 +7,10 @@ Configures the FastAPI app with CORS, routers, and a health check endpoint.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.routes.detection import router as detection_router
@@ -67,6 +69,50 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Exception Handlers ─────────────────────────────────────────
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    logger.warning("HTTP %d error on %s: %s", exc.status_code, request.url.path, exc.detail)
+    detail_payload = exc.detail if isinstance(exc.detail, (dict, list)) else str(exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": "HTTP Exception",
+            "status_code": exc.status_code,
+            "detail": detail_payload,
+            "path": request.url.path,
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.warning("Validation error on %s: %s", request.url.path, exc.errors())
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "Request Validation Error",
+            "status_code": 422,
+            "detail": exc.errors(),
+            "path": request.url.path,
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled exception on %s: %s", request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal Server Error",
+            "status_code": 500,
+            "detail": "An internal server error occurred while processing the request.",
+            "path": request.url.path,
+        },
+    )
+
 
 # ── Routers ────────────────────────────────────────────────────
 app.include_router(detection_router)

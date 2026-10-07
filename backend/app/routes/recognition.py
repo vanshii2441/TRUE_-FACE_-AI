@@ -22,11 +22,13 @@ from app.schemas.recognition import (
     RecognizeResponse,
     UserListResponse,
 )
+from app.services.decision_engine import get_decision_engine
 from app.services.deepfake_detector import get_deepfake_detector
 from app.services.face_detector import get_face_detector
 from app.services.face_embedding import get_face_embedder
 from app.services.image_utils import (
     ImageValidationError,
+    assess_face_quality,
     load_image_from_bytes,
 )
 from app.services.liveness_detector import get_liveness_detector
@@ -42,15 +44,27 @@ router = APIRouter(prefix="/api/v1", tags=["Face Recognition"])
     response_model=EnrollResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Enroll User Face",
-    description="Detect face, verify liveness & deepfake authenticity, extract 512d ArcFace embedding, and index into FAISS 1:N database.",
+    description="Detect face, verify quality, liveness & deepfake authenticity, extract 512d ArcFace embedding, and index into FAISS 1:N database.",
 )
 async def enroll_face(
     user_id: str = Form(..., description="Unique user string identifier"),
     name: str = Form(..., description="Full display name of user"),
+    email: str | None = Form(None, description="Optional user email address"),
     file: UploadFile = File(..., description="Image file containing a single face"),
     extra_metadata: str | None = Form(None, description="Optional JSON string of additional user metadata"),
 ) -> EnrollResponse:
     t_start = time.perf_counter()
+    logger.info("Enrollment initiated for user_id='%s', name='%s', email='%s', filename='%s'", user_id, name, email or "", file.filename)
+
+    # Check for duplicate user_id enrollment
+    vector_store = get_vector_store()
+    existing = vector_store.get_user_by_id(user_id)
+    if existing:
+        logger.warning("Enrollment rejected: User ID '%s' is already registered.", user_id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"User ID '{user_id}' is already enrolled. Please use a unique User ID or delete the existing user first.",
+        )
 
     # Validate uploaded file
     if not file.filename:
@@ -64,6 +78,7 @@ async def enroll_face(
     try:
         image_bgr = load_image_from_bytes(image_bytes)
     except ImageValidationError as e:
+        logger.warning("Enrollment image validation failed for user %s: %s", user_id, e)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     # 1. Face Detection
@@ -72,6 +87,7 @@ async def enroll_face(
     detections = detector.detect_and_crop(image_bgr)
     t_det_end = time.perf_counter()
     detection_ms = (t_det_end - t_det_start) * 1000.0
+    logger.info("Enrollment face detection for user %s found %d face(s) (%.2fms)", user_id, len(detections), detection_ms)
 
     if len(detections) == 0:
         raise HTTPException(
@@ -88,12 +104,31 @@ async def enroll_face(
     face_crop = detections[0]["crop"]
     face_conf = detections[0]["confidence"]
 
-    # 2. Passive Anti-Spoofing Liveness Analysis
+    # 2. Face Quality Assessment
+    t_qual_start = time.perf_counter()
+    quality_res = assess_face_quality(
+        image_bgr=image_bgr,
+        crop_bgr=face_crop,
+        blur_threshold=settings.blur_threshold,
+        min_size=settings.min_face_size,
+    )
+    t_qual_end = time.perf_counter()
+    quality_ms = (t_qual_end - t_qual_start) * 1000.0
+    logger.info("Enrollment quality assessment for user %s: score=%.2f, passed=%s (%.2fms)", user_id, quality_res["quality_score"], quality_res["is_quality_passed"], quality_ms)
+
+    if settings.enable_quality_check and not quality_res["is_quality_passed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Enrollment rejected due to low image quality: {quality_res['reason']}",
+        )
+
+    # 3. Passive Anti-Spoofing Liveness Analysis
     t_liv_start = time.perf_counter()
     liveness_detector = get_liveness_detector()
     liveness_res = liveness_detector.predict(face_crop)
     t_liv_end = time.perf_counter()
     liveness_ms = (t_liv_end - t_liv_start) * 1000.0
+    logger.info("Enrollment liveness score for user %s: %.4f (is_live=%s, %.2fms)", user_id, liveness_res["liveness_score"], liveness_res["is_live"], liveness_ms)
 
     if settings.enable_liveness_check and not liveness_res["is_live"]:
         logger.warning(
@@ -109,12 +144,13 @@ async def enroll_face(
             ),
         )
 
-    # 3. Deepfake Detection Analysis
+    # 4. Deepfake Detection Analysis
     t_df_start = time.perf_counter()
     deepfake_detector = get_deepfake_detector()
     deepfake_res = deepfake_detector.predict(face_crop)
     t_df_end = time.perf_counter()
     deepfake_ms = (t_df_end - t_df_start) * 1000.0
+    logger.info("Enrollment deepfake prob for user %s: %.4f (is_deepfake=%s, %.2fms)", user_id, deepfake_res["deepfake_probability"], deepfake_res["is_deepfake"], deepfake_ms)
 
     if settings.enable_deepfake_check and deepfake_res["is_deepfake"]:
         logger.warning(
@@ -130,7 +166,7 @@ async def enroll_face(
             ),
         )
 
-    # 4. Face Embedding
+    # 5. Face Embedding
     t_emb_start = time.perf_counter()
     embedder = get_face_embedder()
     try:
@@ -151,8 +187,10 @@ async def enroll_face(
             meta_dict = json.loads(extra_metadata)
         except Exception:
             meta_dict = {"raw_metadata": extra_metadata}
+    if email:
+        meta_dict["email"] = email.strip()
 
-    # 5. Vector Database Indexing
+    # 6. Vector Database Indexing
     t_idx_start = time.perf_counter()
     vector_store = get_vector_store()
     try:
@@ -173,6 +211,7 @@ async def enroll_face(
 
     t_total_end = time.perf_counter()
     total_ms = (t_total_end - t_start) * 1000.0
+    logger.info("Enrollment SUCCESS for user_id='%s' (faiss_id=%d, total_time=%.2fms)", user_id, faiss_id, total_ms)
 
     user_records = vector_store.get_user_by_id(user_id)
     enrolled_at = user_records[-1]["enrolled_at"] if user_records else ""
@@ -192,6 +231,7 @@ async def enroll_face(
         deepfake_status=deepfake_res["deepfake_status"],
         timing_ms={
             "detection_ms": round(detection_ms, 2),
+            "quality_ms": round(quality_ms, 2),
             "liveness_ms": round(liveness_ms, 2),
             "deepfake_ms": round(deepfake_ms, 2),
             "embedding_ms": round(embedding_ms, 2),
@@ -207,8 +247,9 @@ async def enroll_face(
     status_code=status.HTTP_200_OK,
     summary="Recognize & Authenticate Face",
     description=(
-        "Complete face authentication pipeline: "
-        "Face Detection -> Liveness Detection -> Deepfake Detection -> Face Embedding -> FAISS 1:N Recognition -> Final Decision"
+        "Complete end-to-end face authentication pipeline: "
+        "Image Input -> Face Detection -> Quality Check -> Liveness Detection -> "
+        "Deepfake Detection -> Face Embedding -> FAISS 1:N Recognition -> Centralized Decision Engine"
     ),
 )
 async def recognize_face(
@@ -217,334 +258,228 @@ async def recognize_face(
     threshold: float | None = Form(None, description="Cosine similarity score threshold (0.0 - 1.0)"),
 ) -> RecognizeResponse:
     t_start = time.perf_counter()
+    logger.info("Verification started for filename='%s'", file.filename or "unknown")
 
     use_top_k = top_k if top_k is not None else settings.top_k
     use_threshold = threshold if threshold is not None else settings.face_match_threshold
 
-    # Validate image file
+    decision_engine = get_decision_engine()
+    timing_ms: dict[str, float] = {}
+
+    # Validate image file presence
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No file selected for upload.",
         )
 
-    image_bytes = await file.read()
-
+    # Read image bytes
     try:
+        image_bytes = await file.read()
         image_bgr = load_image_from_bytes(image_bytes)
     except ImageValidationError as e:
+        logger.warning("Verification image validation failed: %s", e)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error("System error reading uploaded image: %s", e, exc_info=True)
+        logger.error("Error loading image for verification: %s", e, exc_info=True)
         t_total_end = time.perf_counter()
         total_ms = (t_total_end - t_start) * 1000.0
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=0.0,
-            deepfake_probability=0.0,
-            final_decision="SYSTEM_ERROR",
-            total_processing_time=round(total_ms, 2),
-            status="SYSTEM_ERROR",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
-            threshold=use_threshold,
-            is_live=False,
-            liveness_status="UNKNOWN",
-            is_deepfake=False,
-            deepfake_status="UNKNOWN",
-            top_candidates=[],
+        outcome = decision_engine.evaluate(
             detected_faces_count=0,
-            timing_ms={"total_ms": round(total_ms, 2)},
+            system_error=f"Corrupted or invalid image input: {e}",
         )
+        return _build_recognize_response(outcome, threshold=use_threshold, timing={"total_ms": round(total_ms, 2)})
 
-    # 1. Face Detection
+    # 1. Face Detection Stage
     t_det_start = time.perf_counter()
     detector = get_face_detector()
     try:
         detections = detector.detect_and_crop(image_bgr)
     except Exception as e:
-        logger.error("Face detection system failure: %s", e, exc_info=True)
+        logger.error("Face detection exception: %s", e, exc_info=True)
         t_total_end = time.perf_counter()
         total_ms = (t_total_end - t_start) * 1000.0
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=0.0,
-            deepfake_probability=0.0,
-            final_decision="SYSTEM_ERROR",
-            total_processing_time=round(total_ms, 2),
-            status="SYSTEM_ERROR",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
-            threshold=use_threshold,
-            is_live=False,
-            liveness_status="UNKNOWN",
-            is_deepfake=False,
-            deepfake_status="UNKNOWN",
-            top_candidates=[],
+        outcome = decision_engine.evaluate(
             detected_faces_count=0,
-            timing_ms={"total_ms": round(total_ms, 2)},
+            system_error=f"Face detection engine error: {e}",
         )
+        return _build_recognize_response(outcome, threshold=use_threshold, timing={"total_ms": round(total_ms, 2)})
 
     t_det_end = time.perf_counter()
-    detection_ms = (t_det_end - t_det_start) * 1000.0
+    timing_ms["detection_ms"] = round((t_det_end - t_det_start) * 1000.0, 2)
     detected_count = len(detections)
+    logger.info("Face detection complete: %d face(s) found in %.2fms", detected_count, timing_ms["detection_ms"])
 
-    if detected_count == 0:
+    # Early exit if 0 or multiple faces detected
+    if detected_count != 1:
         t_total_end = time.perf_counter()
-        total_ms = (t_total_end - t_start) * 1000.0
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=0.0,
-            deepfake_probability=0.0,
-            final_decision="NO_FACE",
-            total_processing_time=round(total_ms, 2),
-            status="NO_FACE",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
+        timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
+        outcome = decision_engine.evaluate(detected_faces_count=detected_count)
+        return _build_recognize_response(
+            outcome,
             threshold=use_threshold,
-            is_live=False,
-            liveness_status="UNKNOWN",
-            is_deepfake=False,
-            deepfake_status="UNKNOWN",
-            top_candidates=[],
-            detected_faces_count=0,
-            timing_ms={
-                "detection_ms": round(detection_ms, 2),
-                "liveness_ms": 0.0,
-                "deepfake_ms": 0.0,
-                "embedding_ms": 0.0,
-                "search_ms": 0.0,
-                "total_ms": round(total_ms, 2),
-            },
+            timing=timing_ms,
+            detected_count=detected_count,
         )
 
-    primary_detection = detections[0]
-    face_confidence = primary_detection.get("confidence", 1.0)
+    primary_crop = detections[0]["crop"]
 
-    # Check for LOW_CONFIDENCE or multiple faces
-    if detected_count > 1 or face_confidence < settings.detection_confidence_threshold:
+    # 2. Face Quality Assessment Stage
+    t_qual_start = time.perf_counter()
+    quality_res = assess_face_quality(
+        image_bgr=image_bgr,
+        crop_bgr=primary_crop,
+        blur_threshold=settings.blur_threshold,
+        min_size=settings.min_face_size,
+    )
+    t_qual_end = time.perf_counter()
+    timing_ms["quality_ms"] = round((t_qual_end - t_qual_start) * 1000.0, 2)
+    logger.info(
+        "Quality check complete: score=%.2f, blur_score=%.1f, passed=%s in %.2fms",
+        quality_res["quality_score"],
+        quality_res["blur_score"],
+        quality_res["is_quality_passed"],
+        timing_ms["quality_ms"],
+    )
+
+    if settings.enable_quality_check and not quality_res["is_quality_passed"]:
         t_total_end = time.perf_counter()
-        total_ms = (t_total_end - t_start) * 1000.0
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=0.0,
-            deepfake_probability=0.0,
-            final_decision="LOW_CONFIDENCE",
-            total_processing_time=round(total_ms, 2),
-            status="LOW_CONFIDENCE",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
+        timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
+        outcome = decision_engine.evaluate(
+            detected_faces_count=1,
+            quality_res=quality_res,
+        )
+        return _build_recognize_response(
+            outcome,
             threshold=use_threshold,
-            is_live=False,
-            liveness_status="UNKNOWN",
-            is_deepfake=False,
-            deepfake_status="UNKNOWN",
-            top_candidates=[],
-            detected_faces_count=detected_count,
-            timing_ms={
-                "detection_ms": round(detection_ms, 2),
-                "liveness_ms": 0.0,
-                "deepfake_ms": 0.0,
-                "embedding_ms": 0.0,
-                "search_ms": 0.0,
-                "total_ms": round(total_ms, 2),
-            },
+            timing=timing_ms,
+            detected_count=1,
         )
 
-    primary_face_crop = primary_detection["crop"]
-
-    # 2. Passive Anti-Spoofing Liveness Analysis
+    # 3. Liveness Anti-Spoofing Detection Stage
     t_liv_start = time.perf_counter()
     liveness_detector = get_liveness_detector()
     try:
-        liveness_res = liveness_detector.predict(primary_face_crop)
+        liveness_res = liveness_detector.predict(primary_crop)
     except Exception as e:
         logger.error("Liveness detector error: %s", e, exc_info=True)
         t_total_end = time.perf_counter()
-        total_ms = (t_total_end - t_start) * 1000.0
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=0.0,
-            deepfake_probability=0.0,
-            final_decision="SYSTEM_ERROR",
-            total_processing_time=round(total_ms, 2),
-            status="SYSTEM_ERROR",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
-            threshold=use_threshold,
-            is_live=False,
-            liveness_status="ERROR",
-            is_deepfake=False,
-            deepfake_status="UNKNOWN",
-            top_candidates=[],
-            detected_faces_count=detected_count,
-            timing_ms={
-                "detection_ms": round(detection_ms, 2),
-                "liveness_ms": 0.0,
-                "total_ms": round(total_ms, 2),
-            },
+        timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
+        outcome = decision_engine.evaluate(
+            detected_faces_count=1,
+            quality_res=quality_res,
+            system_error=f"Liveness detection failure: {e}",
         )
+        return _build_recognize_response(
+            outcome,
+            threshold=use_threshold,
+            timing=timing_ms,
+            detected_count=1,
+        )
+
     t_liv_end = time.perf_counter()
-    liveness_ms = (t_liv_end - t_liv_start) * 1000.0
+    timing_ms["liveness_ms"] = round((t_liv_end - t_liv_start) * 1000.0, 2)
+    logger.info(
+        "Liveness check complete: score=%.4f (is_live=%s) in %.2fms",
+        liveness_res["liveness_score"],
+        liveness_res["is_live"],
+        timing_ms["liveness_ms"],
+    )
 
     if settings.enable_liveness_check and not liveness_res["is_live"]:
         t_total_end = time.perf_counter()
-        total_ms = (t_total_end - t_start) * 1000.0
-        logger.warning(
-            "Recognition authentication blocked by anti-spoofing engine (Liveness score: %.4f)",
-            liveness_res["liveness_score"],
+        timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
+        outcome = decision_engine.evaluate(
+            detected_faces_count=1,
+            quality_res=quality_res,
+            liveness_res=liveness_res,
         )
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=liveness_res["liveness_score"],
-            deepfake_probability=0.0,
-            final_decision="LIVENESS_FAILED",
-            total_processing_time=round(total_ms, 2),
-            status="LIVENESS_FAILED",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
+        return _build_recognize_response(
+            outcome,
             threshold=use_threshold,
-            is_live=False,
-            liveness_status="SPOOF",
-            is_deepfake=False,
-            deepfake_status="UNKNOWN",
-            top_candidates=[],
-            detected_faces_count=detected_count,
-            timing_ms={
-                "detection_ms": round(detection_ms, 2),
-                "liveness_ms": round(liveness_ms, 2),
-                "deepfake_ms": 0.0,
-                "embedding_ms": 0.0,
-                "search_ms": 0.0,
-                "total_ms": round(total_ms, 2),
-            },
+            timing=timing_ms,
+            detected_count=1,
         )
 
-    # 3. Deepfake Detection Analysis
+    # 4. Deepfake Synthetic Detection Stage
     t_df_start = time.perf_counter()
     deepfake_detector = get_deepfake_detector()
     try:
-        deepfake_res = deepfake_detector.predict(primary_face_crop)
+        deepfake_res = deepfake_detector.predict(primary_crop)
     except Exception as e:
         logger.error("Deepfake detector error: %s", e, exc_info=True)
         t_total_end = time.perf_counter()
-        total_ms = (t_total_end - t_start) * 1000.0
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=liveness_res["liveness_score"],
-            deepfake_probability=0.0,
-            final_decision="SYSTEM_ERROR",
-            total_processing_time=round(total_ms, 2),
-            status="SYSTEM_ERROR",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
-            threshold=use_threshold,
-            is_live=True,
-            liveness_status=liveness_res["liveness_status"],
-            is_deepfake=False,
-            deepfake_status="ERROR",
-            top_candidates=[],
-            detected_faces_count=detected_count,
-            timing_ms={
-                "detection_ms": round(detection_ms, 2),
-                "liveness_ms": round(liveness_ms, 2),
-                "deepfake_ms": 0.0,
-                "total_ms": round(total_ms, 2),
-            },
+        timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
+        outcome = decision_engine.evaluate(
+            detected_faces_count=1,
+            quality_res=quality_res,
+            liveness_res=liveness_res,
+            system_error=f"Deepfake detection failure: {e}",
         )
+        return _build_recognize_response(
+            outcome,
+            threshold=use_threshold,
+            timing=timing_ms,
+            detected_count=1,
+        )
+
     t_df_end = time.perf_counter()
-    deepfake_ms = (t_df_end - t_df_start) * 1000.0
+    timing_ms["deepfake_ms"] = round((t_df_end - t_df_start) * 1000.0, 2)
+    logger.info(
+        "Deepfake check complete: prob=%.4f (is_deepfake=%s) in %.2fms",
+        deepfake_res["deepfake_probability"],
+        deepfake_res["is_deepfake"],
+        timing_ms["deepfake_ms"],
+    )
 
     if settings.enable_deepfake_check and deepfake_res["is_deepfake"]:
         t_total_end = time.perf_counter()
-        total_ms = (t_total_end - t_start) * 1000.0
-        logger.warning(
-            "Recognition authentication blocked by deepfake detection engine (Probability: %.4f)",
-            deepfake_res["deepfake_probability"],
+        timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
+        outcome = decision_engine.evaluate(
+            detected_faces_count=1,
+            quality_res=quality_res,
+            liveness_res=liveness_res,
+            deepfake_res=deepfake_res,
         )
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=liveness_res["liveness_score"],
-            deepfake_probability=deepfake_res["deepfake_probability"],
-            final_decision="DEEPFAKE_SUSPECTED",
-            total_processing_time=round(total_ms, 2),
-            status="DEEPFAKE_SUSPECTED",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
+        return _build_recognize_response(
+            outcome,
             threshold=use_threshold,
-            is_live=liveness_res["is_live"],
-            liveness_status=liveness_res["liveness_status"],
-            is_deepfake=True,
-            deepfake_status=deepfake_res["deepfake_status"],
-            top_candidates=[],
-            detected_faces_count=detected_count,
-            timing_ms={
-                "detection_ms": round(detection_ms, 2),
-                "liveness_ms": round(liveness_ms, 2),
-                "deepfake_ms": round(deepfake_ms, 2),
-                "embedding_ms": 0.0,
-                "search_ms": 0.0,
-                "total_ms": round(total_ms, 2),
-            },
+            timing=timing_ms,
+            detected_count=1,
         )
 
-    # 4. Face Embedding
+    # 5. Face Embedding Generation Stage
     t_emb_start = time.perf_counter()
     embedder = get_face_embedder()
     try:
-        query_vec = embedder.generate_embedding(primary_face_crop)
+        query_vec = embedder.generate_embedding(primary_crop)
     except Exception as e:
-        logger.error("Embedding extraction failed during recognition: %s", e, exc_info=True)
+        logger.error("Embedding generation error: %s", e, exc_info=True)
         t_total_end = time.perf_counter()
-        total_ms = (t_total_end - t_start) * 1000.0
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=liveness_res["liveness_score"],
-            deepfake_probability=deepfake_res["deepfake_probability"],
-            final_decision="SYSTEM_ERROR",
-            total_processing_time=round(total_ms, 2),
-            status="SYSTEM_ERROR",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
-            threshold=use_threshold,
-            is_live=liveness_res["is_live"],
-            liveness_status=liveness_res["liveness_status"],
-            is_deepfake=deepfake_res["is_deepfake"],
-            deepfake_status=deepfake_res["deepfake_status"],
-            top_candidates=[],
-            detected_faces_count=detected_count,
-            timing_ms={
-                "detection_ms": round(detection_ms, 2),
-                "liveness_ms": round(liveness_ms, 2),
-                "deepfake_ms": round(deepfake_ms, 2),
-                "embedding_ms": 0.0,
-                "total_ms": round(total_ms, 2),
-            },
+        timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
+        outcome = decision_engine.evaluate(
+            detected_faces_count=1,
+            quality_res=quality_res,
+            liveness_res=liveness_res,
+            deepfake_res=deepfake_res,
+            system_error=f"Embedding extraction failure: {e}",
         )
-    t_emb_end = time.perf_counter()
-    embedding_ms = (t_emb_end - t_emb_start) * 1000.0
+        return _build_recognize_response(
+            outcome,
+            threshold=use_threshold,
+            timing=timing_ms,
+            detected_count=1,
+        )
 
-    # 5. FAISS 1:N Vector Search
+    t_emb_end = time.perf_counter()
+    timing_ms["embedding_ms"] = round((t_emb_end - t_emb_start) * 1000.0, 2)
+    logger.info("Face embedding extraction complete in %.2fms", timing_ms["embedding_ms"])
+
+    # 6. FAISS 1:N Vector Search Stage
     t_srch_start = time.perf_counter()
     vector_store = get_vector_store()
+    total_enrolled = vector_store.count()
+
     try:
         raw_candidates = vector_store.search(
             query_embedding=query_vec,
@@ -552,83 +487,118 @@ async def recognize_face(
             threshold=use_threshold,
         )
     except Exception as e:
-        logger.error("FAISS vector search failed: %s", e, exc_info=True)
+        logger.error("FAISS vector search error: %s", e, exc_info=True)
         t_total_end = time.perf_counter()
-        total_ms = (t_total_end - t_start) * 1000.0
-        return RecognizeResponse(
-            identity=None,
-            similarity_score=0.0,
-            liveness_score=liveness_res["liveness_score"],
-            deepfake_probability=deepfake_res["deepfake_probability"],
-            final_decision="SYSTEM_ERROR",
-            total_processing_time=round(total_ms, 2),
-            status="SYSTEM_ERROR",
-            is_authenticated=False,
-            matched_user=None,
-            best_similarity=0.0,
-            threshold=use_threshold,
-            is_live=liveness_res["is_live"],
-            liveness_status=liveness_res["liveness_status"],
-            is_deepfake=deepfake_res["is_deepfake"],
-            deepfake_status=deepfake_res["deepfake_status"],
-            top_candidates=[],
-            detected_faces_count=detected_count,
-            timing_ms={
-                "detection_ms": round(detection_ms, 2),
-                "liveness_ms": round(liveness_ms, 2),
-                "deepfake_ms": round(deepfake_ms, 2),
-                "embedding_ms": round(embedding_ms, 2),
-                "search_ms": 0.0,
-                "total_ms": round(total_ms, 2),
-            },
+        timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
+        outcome = decision_engine.evaluate(
+            detected_faces_count=1,
+            quality_res=quality_res,
+            liveness_res=liveness_res,
+            deepfake_res=deepfake_res,
+            total_enrolled=total_enrolled,
+            system_error=f"Vector database search failure: {e}",
         )
+        return _build_recognize_response(
+            outcome,
+            threshold=use_threshold,
+            timing=timing_ms,
+            detected_count=1,
+        )
+
     t_srch_end = time.perf_counter()
-    search_ms = (t_srch_end - t_srch_start) * 1000.0
-
-    t_total_end = time.perf_counter()
-    total_ms = (t_total_end - t_start) * 1000.0
-
+    timing_ms["search_ms"] = round((t_srch_end - t_srch_start) * 1000.0, 2)
     top_candidates = [RecognizeCandidate(**cand) for cand in raw_candidates]
 
     best_sim = top_candidates[0].similarity if top_candidates else 0.0
-    matched_candidate = top_candidates[0] if (top_candidates and top_candidates[0].is_match) else None
+    matched_cand = top_candidates[0] if (top_candidates and top_candidates[0].is_match) else None
 
-    # Determine final decision
-    if matched_candidate is not None:
-        final_decision = "AUTHENTICATED"
-        is_auth = True
-        identity = matched_candidate.name
-    else:
-        final_decision = "UNKNOWN_USER"
-        is_auth = False
-        identity = None
+    logger.info(
+        "FAISS search complete: %d candidates returned, best_sim=%.4f (matched=%s) in %.2fms",
+        len(top_candidates),
+        best_sim,
+        matched_cand.user_id if matched_cand else "None",
+        timing_ms["search_ms"],
+    )
+
+    t_total_end = time.perf_counter()
+    timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
+
+    # 7. Final Centralized Decision Evaluation
+    outcome = decision_engine.evaluate(
+        detected_faces_count=1,
+        quality_res=quality_res,
+        liveness_res=liveness_res,
+        deepfake_res=deepfake_res,
+        match_candidate=matched_cand,
+        best_similarity=best_sim,
+        total_enrolled=total_enrolled,
+    )
+
+    logger.info(
+        "Verification decision complete: status=%s, identity=%s, total_ms=%.2f",
+        outcome.final_decision,
+        outcome.identity,
+        timing_ms["total_ms"],
+    )
+
+    return _build_recognize_response(
+        outcome,
+        threshold=use_threshold,
+        timing=timing_ms,
+        detected_count=1,
+        matched_candidate=matched_cand,
+        top_candidates=top_candidates,
+        liveness_status=liveness_res.get("liveness_status", "REAL"),
+        deepfake_status=deepfake_res.get("deepfake_status", "REAL"),
+    )
+
+
+def _build_recognize_response(
+    outcome: Any,
+    threshold: float,
+    timing: dict[str, float],
+    detected_count: int = 0,
+    matched_candidate: RecognizeCandidate | None = None,
+    top_candidates: list[RecognizeCandidate] | None = None,
+    liveness_status: str = "REAL",
+    deepfake_status: str = "REAL",
+) -> RecognizeResponse:
+    """Helper to convert DecisionOutcome into RecognizeResponse schema."""
+    full_timing = {
+        "detection_ms": 0.0,
+        "quality_ms": 0.0,
+        "liveness_ms": 0.0,
+        "deepfake_ms": 0.0,
+        "embedding_ms": 0.0,
+        "search_ms": 0.0,
+        "total_ms": 0.0,
+    }
+    full_timing.update(timing)
 
     return RecognizeResponse(
-        identity=identity,
-        similarity_score=round(best_sim, 4),
-        liveness_score=liveness_res["liveness_score"],
-        deepfake_probability=deepfake_res["deepfake_probability"],
-        final_decision=final_decision,
-        total_processing_time=round(total_ms, 2),
-        status=final_decision,
-        is_authenticated=is_auth,
+        identity=outcome.identity,
+        similarity_score=outcome.similarity_score,
+        liveness_score=outcome.liveness_score,
+        deepfake_probability=outcome.deepfake_probability,
+        final_decision=outcome.final_decision,
+        explanation=outcome.explanation,
+        reasons=outcome.reasons,
+        quality_score=outcome.quality_score,
+        blur_score=outcome.blur_score,
+        is_quality_passed=outcome.is_quality_passed,
+        total_processing_time=full_timing.get("total_ms", 0.0),
+        status=outcome.status,
+        is_authenticated=outcome.is_authenticated,
         matched_user=matched_candidate,
-        best_similarity=round(best_sim, 4),
-        threshold=use_threshold,
-        is_live=liveness_res["is_live"],
-        liveness_status=liveness_res["liveness_status"],
-        is_deepfake=deepfake_res["is_deepfake"],
-        deepfake_status=deepfake_res["deepfake_status"],
-        top_candidates=top_candidates,
+        best_similarity=outcome.similarity_score,
+        threshold=threshold,
+        is_live=outcome.liveness_score >= settings.liveness_threshold,
+        liveness_status=liveness_status,
+        is_deepfake=outcome.deepfake_probability >= settings.deepfake_threshold,
+        deepfake_status=deepfake_status,
+        top_candidates=top_candidates or [],
         detected_faces_count=detected_count,
-        timing_ms={
-            "detection_ms": round(detection_ms, 2),
-            "liveness_ms": round(liveness_ms, 2),
-            "deepfake_ms": round(deepfake_ms, 2),
-            "embedding_ms": round(embedding_ms, 2),
-            "search_ms": round(search_ms, 2),
-            "total_ms": round(total_ms, 2),
-        },
+        timing_ms=full_timing,
     )
 
 
@@ -656,3 +626,24 @@ async def reset_vector_store() -> dict[str, str]:
     vector_store = get_vector_store()
     vector_store.reset()
     return {"message": "Vector store database reset successfully.", "status": "CLEARED"}
+
+
+@router.delete(
+    "/users/{user_id}",
+    summary="Delete Enrolled User",
+    description="Remove user identity records from FAISS vector store metadata.",
+)
+async def delete_user(user_id: str) -> dict[str, Any]:
+    vector_store = get_vector_store()
+    count_removed = vector_store.delete_user(user_id)
+    if count_removed == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User ID '{user_id}' not found in database.",
+        )
+    return {
+        "message": f"User '{user_id}' successfully deleted.",
+        "user_id": user_id,
+        "removed_records": count_removed,
+        "status": "DELETED",
+    }

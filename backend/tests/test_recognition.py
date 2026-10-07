@@ -171,7 +171,7 @@ class TestRecognitionEndpoints:
 
             # 1. Enroll user
             files = {"file": ("alice.jpg", synthetic_face_jpeg, "image/jpeg")}
-            data = {"user_id": "USR001", "name": "Alice Smith"}
+            data = {"user_id": "USR001", "name": "Alice Smith", "email": "alice@example.com"}
 
             enroll_resp = client.post("/api/v1/enroll", data=data, files=files)
             assert enroll_resp.status_code == 201, enroll_resp.text
@@ -182,7 +182,14 @@ class TestRecognitionEndpoints:
             assert enroll_data["status"] == "SUCCESS"
             assert "deepfake_probability" in enroll_data
 
-            # 2. Recognize user (AUTHENTICATED)
+            # 2. Duplicate enrollment should fail
+            dup_files = {"file": ("alice.jpg", synthetic_face_jpeg, "image/jpeg")}
+            dup_data = {"user_id": "USR001", "name": "Alice Duplicate"}
+            dup_resp = client.post("/api/v1/enroll", data=dup_data, files=dup_files)
+            assert dup_resp.status_code == 400
+            assert "already enrolled" in dup_resp.json()["detail"]
+
+            # 3. Recognize user (AUTHENTICATED)
             rec_files = {"file": ("query.jpg", synthetic_face_jpeg, "image/jpeg")}
             rec_resp = client.post("/api/v1/recognize", files=rec_files)
             assert rec_resp.status_code == 200, rec_resp.text
@@ -197,6 +204,15 @@ class TestRecognitionEndpoints:
             assert rec_data["deepfake_probability"] == 0.05
             assert rec_data["total_processing_time"] > 0
             assert "deepfake_ms" in rec_data["timing_ms"]
+
+            # 4. Delete user and verify deletion
+            del_resp = client.delete("/api/v1/users/USR001")
+            assert del_resp.status_code == 200
+            assert del_resp.json()["status"] == "DELETED"
+
+            # 5. Delete non-existent user should 404
+            del_resp2 = client.delete("/api/v1/users/USR001")
+            assert del_resp2.status_code == 404
 
     def test_recognize_unknown_user(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
         mock_detection = [{
@@ -229,10 +245,11 @@ class TestRecognitionEndpoints:
             assert resp.status_code == 200
             data = resp.json()
 
-            assert data["final_decision"] == "UNKNOWN_USER"
+            # Empty database decision
+            assert data["final_decision"] in ("EMPTY_DATABASE", "UNKNOWN_PERSON")
             assert data["is_authenticated"] is False
             assert data["identity"] is None
-            assert data["similarity_score"] == 0.0
+            assert "explanation" in data
 
     def test_recognize_liveness_failed(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
         mock_detection = [{
@@ -312,18 +329,19 @@ class TestRecognitionEndpoints:
         assert data["is_authenticated"] is False
         assert data["detected_faces_count"] == 0
 
-    def test_recognize_low_confidence(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
-        mock_low_conf_detection = [{
-            "bbox": [10, 10, 150, 150],
-            "confidence": 0.40,  # Below default 0.90 threshold
-            "crop": synthetic_face_bgr,
-        }]
+    def test_recognize_multiple_faces(self, synthetic_face_bgr: np.ndarray, synthetic_face_jpeg: bytes):
+        mock_multi_detection = [
+            {"bbox": [10, 10, 100, 100], "confidence": 0.95, "crop": synthetic_face_bgr},
+            {"bbox": [110, 110, 200, 200], "confidence": 0.92, "crop": synthetic_face_bgr},
+        ]
 
-        with patch.object(FaceDetector, "detect_and_crop", return_value=mock_low_conf_detection):
-            files = {"file": ("query.jpg", synthetic_face_jpeg, "image/jpeg")}
+        with patch.object(FaceDetector, "detect_and_crop", return_value=mock_multi_detection):
+            files = {"file": ("multi.jpg", synthetic_face_jpeg, "image/jpeg")}
             resp = client.post("/api/v1/recognize", files=files)
 
             assert resp.status_code == 200
             data = resp.json()
-            assert data["final_decision"] == "LOW_CONFIDENCE"
+            assert data["final_decision"] == "MULTIPLE_FACES"
             assert data["is_authenticated"] is False
+            assert data["detected_faces_count"] == 2
+

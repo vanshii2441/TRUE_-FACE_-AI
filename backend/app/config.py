@@ -39,6 +39,22 @@ class Settings(BaseSettings):
         description="Maximum allowed image width or height in pixels",
     )
 
+    # --- Face Quality Check ---
+    enable_quality_check: bool = Field(
+        default=True,
+        description="Toggle face image quality assessment gating",
+    )
+    blur_threshold: float = Field(
+        default=30.0,
+        ge=0.0,
+        description="Minimum Laplacian variance required for face blur check",
+    )
+    min_face_size: int = Field(
+        default=40,
+        gt=0,
+        description="Minimum face crop width and height in pixels",
+    )
+
     # --- CORS ---
     cors_origins: list[str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"],

@@ -300,6 +300,20 @@ class VectorStore:
         with self._lock:
             return [rec for rec in self._metadata.values() if rec.get("user_id") == user_id]
 
+    def delete_user(self, user_id: str) -> int:
+        """
+        Remove user metadata records for user_id so they can no longer be matched in searches.
+        Returns count of removed records.
+        """
+        with self._lock:
+            keys_to_remove = [k for k, v in self._metadata.items() if v.get("user_id") == user_id]
+            for k in keys_to_remove:
+                del self._metadata[k]
+            if keys_to_remove:
+                self.save()
+                logger.info("Deleted %d metadata record(s) for user_id '%s'", len(keys_to_remove), user_id)
+            return len(keys_to_remove)
+
     def count(self) -> int:
         """Return total number of enrolled vectors."""
         with self._lock:

@@ -90,9 +90,29 @@ class RecognizeResponse(BaseModel):
     final_decision: str = Field(
         ...,
         description=(
-            "Final pipeline decision: 'AUTHENTICATED', 'UNKNOWN_USER', 'LIVENESS_FAILED', "
-            "'DEEPFAKE_SUSPECTED', 'NO_FACE', 'LOW_CONFIDENCE', or 'SYSTEM_ERROR'"
+            "Final pipeline decision: 'AUTHENTICATED', 'UNKNOWN_PERSON', 'LIVENESS_FAILED', "
+            "'DEEPFAKE_SUSPECTED', 'POOR_QUALITY', 'NO_FACE', 'MULTIPLE_FACES', 'EMPTY_DATABASE', or 'SYSTEM_ERROR'"
         ),
+    )
+    explanation: str = Field(
+        default="",
+        description="Human-readable explainable decision message detailing the exact verification outcome",
+    )
+    reasons: list[str] = Field(
+        default_factory=list,
+        description="List of justification reasons explaining the final decision",
+    )
+    quality_score: float = Field(
+        default=1.0,
+        description="Evaluated face image quality score (0.0 to 1.0)",
+    )
+    blur_score: float = Field(
+        default=100.0,
+        description="Laplacian variance sharpness score",
+    )
+    is_quality_passed: bool = Field(
+        default=True,
+        description="True if image met all quality & sharpness requirements",
     )
     total_processing_time: float = Field(
         ...,

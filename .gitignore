@@ -29,3 +29,7 @@ Thumbs.db
 
 # Vite temporary build files
 *.timestamp-*.mjs
+
+# Scratch directory
+scratch/
+
