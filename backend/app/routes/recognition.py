@@ -17,11 +17,13 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.config import settings
 from app.schemas.recognition import (
+    AuditHistoryResponse,
     EnrollResponse,
     RecognizeCandidate,
     RecognizeResponse,
     UserListResponse,
 )
+from app.services.audit_store import get_audit_store
 from app.services.decision_engine import get_decision_engine
 from app.services.deepfake_detector import get_deepfake_detector
 from app.services.face_detector import get_face_detector
@@ -575,6 +577,26 @@ def _build_recognize_response(
     }
     full_timing.update(timing)
 
+    # Record attempt into persistent audit store
+    try:
+        audit_store = get_audit_store()
+        audit_store.log_verification(
+            final_decision=outcome.final_decision,
+            is_authenticated=outcome.is_authenticated,
+            identity=outcome.identity,
+            user_id=matched_candidate.user_id if matched_candidate else None,
+            similarity_score=outcome.similarity_score,
+            liveness_score=outcome.liveness_score,
+            liveness_status=liveness_status,
+            deepfake_probability=outcome.deepfake_probability,
+            deepfake_status=deepfake_status,
+            quality_score=outcome.quality_score,
+            explanation=outcome.explanation,
+            timing_ms=full_timing,
+        )
+    except Exception as e:
+        logger.error("Failed to log audit history: %s", e, exc_info=True)
+
     return RecognizeResponse(
         identity=outcome.identity,
         similarity_score=outcome.similarity_score,
@@ -647,3 +669,30 @@ async def delete_user(user_id: str) -> dict[str, Any]:
         "removed_records": count_removed,
         "status": "DELETED",
     }
+
+
+@router.get(
+    "/history",
+    response_model=AuditHistoryResponse,
+    summary="Get Verification History",
+    description="Retrieve recent biometric face verification attempt audit logs.",
+)
+async def get_verification_history(limit: int = 50) -> AuditHistoryResponse:
+    audit_store = get_audit_store()
+    logs = audit_store.get_history(limit=limit)
+    return AuditHistoryResponse(
+        total_logs=len(logs),
+        history=logs,
+    )
+
+
+@router.delete(
+    "/history/clear",
+    summary="Clear Verification History",
+    description="Clear all biometric verification audit history logs.",
+)
+async def clear_verification_history() -> dict[str, str]:
+    audit_store = get_audit_store()
+    audit_store.clear_history()
+    return {"message": "Verification history cleared.", "status": "CLEARED"}
+

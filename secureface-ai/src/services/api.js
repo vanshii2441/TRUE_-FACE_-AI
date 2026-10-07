@@ -127,4 +127,52 @@ export async function deleteUser(userId) {
   }
 }
 
-export default { registerUser, recognizeFace, getUsers, resetUsers, deleteUser, detectFace }
+/**
+ * Fetch biometric verification audit history log.
+ * GET /api/v1/history
+ */
+export async function getVerificationHistory(limit = 50) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/history?limit=${limit}`)
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to fetch verification history')
+    }
+    return data
+  } catch (error) {
+    console.error('Error fetching history:', error)
+    throw error
+  }
+}
+
+/**
+ * Clear biometric verification audit history log.
+ * DELETE /api/v1/history/clear
+ */
+export async function clearVerificationHistory() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/history/clear`, {
+      method: 'DELETE',
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to clear verification history')
+    }
+    return data
+  } catch (error) {
+    console.error('Error clearing history:', error)
+    throw error
+  }
+}
+
+export default {
+  registerUser,
+  recognizeFace,
+  getUsers,
+  resetUsers,
+  deleteUser,
+  detectFace,
+  getVerificationHistory,
+  clearVerificationHistory,
+}
+

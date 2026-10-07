@@ -214,3 +214,31 @@ class UserListResponse(BaseModel):
 
     total_enrolled: int = Field(..., description="Total enrolled face vectors in index")
     users: list[dict[str, Any]] = Field(..., description="List of user records")
+
+
+class AuditHistoryItem(BaseModel):
+    """Schema for individual audit history item."""
+
+    id: str = Field(..., description="Unique audit record ID")
+    timestamp: str = Field(..., description="ISO timestamp of verification attempt")
+    final_decision: str = Field(..., description="Final pipeline decision status")
+    status: str = Field(..., description="Decision status string")
+    is_authenticated: bool = Field(..., description="True if identity was verified")
+    identity: str | None = Field(default=None, description="Recognized user name or ID")
+    user_id: str | None = Field(default=None, description="User ID if matched")
+    similarity_score: float = Field(default=0.0, description="Highest similarity score")
+    liveness_score: float = Field(default=1.0, description="Liveness score")
+    liveness_status: str = Field(default="REAL", description="Liveness status")
+    deepfake_probability: float = Field(default=0.0, description="Deepfake probability")
+    deepfake_status: str = Field(default="REAL", description="Deepfake status")
+    quality_score: float = Field(default=1.0, description="Image quality score")
+    explanation: str = Field(default="", description="Decision explanation")
+    timing_ms: dict[str, float] = Field(default_factory=dict, description="Latency metrics")
+
+
+class AuditHistoryResponse(BaseModel):
+    """Response schema listing verification history logs."""
+
+    total_logs: int = Field(..., description="Total audit records returned")
+    history: list[AuditHistoryItem] = Field(..., description="List of recent audit history items")
+

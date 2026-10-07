@@ -33,3 +33,7 @@ Thumbs.db
 # Scratch directory
 scratch/
 
+# Runtime audit log data
+data/audit_history.json
+
+

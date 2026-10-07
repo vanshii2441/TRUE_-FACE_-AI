@@ -16,7 +16,7 @@ const mainNav = [
   },
   {
     to: '/authenticate',
-    label: 'Live Authentication',
+    label: 'Verify Identity',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -26,7 +26,7 @@ const mainNav = [
   },
   {
     to: '/register',
-    label: 'Register User',
+    label: 'Enroll User',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -59,6 +59,7 @@ const mainNav = [
     ),
   },
 ]
+
 
 /* Planned features (disabled — shown for reference) */
 const futureNav = [
