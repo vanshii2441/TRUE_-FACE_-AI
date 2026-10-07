@@ -13,8 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.routes.admin import router as admin_router
 from app.routes.detection import router as detection_router
 from app.routes.recognition import router as recognition_router
+
 from app.services.deepfake_detector import get_deepfake_detector
 from app.services.face_detector import get_face_detector
 from app.services.face_embedding import get_face_embedder
@@ -114,9 +116,41 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
+import time
+
+# Rate limiting sliding window state
+_request_history: dict[str, list[float]] = {}
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    now = time.time()
+    
+    # Exclude static/health routes from strict rate limit if needed
+    history = [t for t in _request_history.get(client_ip, []) if now - t < 60.0]
+    if len(history) >= settings.rate_limit_per_minute:
+        logger.warning("Rate limit exceeded for client IP %s on %s", client_ip, request.url.path)
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "Rate Limit Exceeded",
+                "status_code": 429,
+                "detail": f"Too many requests. Limit is {settings.rate_limit_per_minute} requests per minute.",
+                "path": request.url.path,
+            },
+        )
+    
+    history.append(now)
+    _request_history[client_ip] = history
+    return await call_next(request)
+
+
 # ── Routers ────────────────────────────────────────────────────
 app.include_router(detection_router)
 app.include_router(recognition_router)
+app.include_router(admin_router)
+
 
 
 # ── Health check ───────────────────────────────────────────────

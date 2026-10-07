@@ -5,6 +5,8 @@ import Register from './pages/Register'
 import Authenticate from './pages/Authenticate'
 import Users from './pages/Users'
 import ThreatMonitor from './pages/ThreatMonitor'
+import AuditLogs from './pages/AuditLogs'
+import SystemStatus from './pages/SystemStatus'
 
 function App() {
   return (
@@ -15,6 +17,8 @@ function App() {
         <Route path="/authenticate" element={<Authenticate />} />
         <Route path="/users" element={<Users />} />
         <Route path="/threat-monitor" element={<ThreatMonitor />} />
+        <Route path="/audit-logs" element={<AuditLogs />} />
+        <Route path="/system-status" element={<SystemStatus />} />
       </Route>
     </Routes>
   )

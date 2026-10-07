@@ -165,6 +165,151 @@ export async function clearVerificationHistory() {
   }
 }
 
+/**
+ * Admin Login.
+ * POST /api/v1/admin/login
+ */
+export async function adminLogin(username, password) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Admin authentication failed')
+    }
+    return data
+  } catch (error) {
+    console.error('Error logging in admin:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch Analytics Overview statistics.
+ * GET /api/v1/analytics/overview
+ */
+export async function getAnalyticsOverview() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/analytics/overview`)
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to fetch analytics overview')
+    }
+    return data
+  } catch (error) {
+    console.error('Error fetching analytics overview:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch Evaluation Metrics.
+ * GET /api/v1/analytics/evaluation
+ */
+export async function getEvaluationMetrics() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/analytics/evaluation`)
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to fetch evaluation metrics')
+    }
+    return data
+  } catch (error) {
+    console.error('Error fetching evaluation metrics:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch Paginated Audit Logs with Search & Filtering.
+ * GET /api/v1/audit/logs
+ */
+export async function getPaginatedAuditLogs({ q = '', result_filter = 'ALL', start_date = '', end_date = '', page = 1, page_size = 15 } = {}) {
+  try {
+    const params = new URLSearchParams()
+    if (q) params.append('q', q)
+    if (result_filter && result_filter !== 'ALL') params.append('result_filter', result_filter)
+    if (start_date) params.append('start_date', start_date)
+    if (end_date) params.append('end_date', end_date)
+    params.append('page', page)
+    params.append('page_size', page_size)
+
+    const res = await fetch(`${API_BASE_URL}/api/v1/audit/logs?${params.toString()}`)
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to fetch paginated audit logs')
+    }
+    return data
+  } catch (error) {
+    console.error('Error fetching audit logs:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch Detailed Health Status of API and Models.
+ * GET /api/v1/health/detailed
+ */
+export async function getDetailedHealth() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/health/detailed`)
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to fetch system status')
+    }
+    return data
+  } catch (error) {
+    console.error('Error fetching detailed health:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch System Threshold Configuration.
+ * GET /api/v1/config/thresholds
+ */
+export async function getThresholds() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/config/thresholds`)
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to fetch thresholds')
+    }
+    return data
+  } catch (error) {
+    console.error('Error fetching thresholds:', error)
+    throw error
+  }
+}
+
+/**
+ * Update System Threshold Configuration (Requires Admin Token).
+ * PUT /api/v1/config/thresholds
+ */
+export async function updateThresholds(thresholds, token) {
+  try {
+    const headers = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+
+    const res = await fetch(`${API_BASE_URL}/api/v1/config/thresholds`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(thresholds),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || 'Failed to update thresholds')
+    }
+    return data
+  } catch (error) {
+    console.error('Error updating thresholds:', error)
+    throw error
+  }
+}
+
 export default {
   registerUser,
   recognizeFace,
@@ -174,5 +319,13 @@ export default {
   detectFace,
   getVerificationHistory,
   clearVerificationHistory,
+  adminLogin,
+  getAnalyticsOverview,
+  getEvaluationMetrics,
+  getPaginatedAuditLogs,
+  getDetailedHealth,
+  getThresholds,
+  updateThresholds,
 }
+
 

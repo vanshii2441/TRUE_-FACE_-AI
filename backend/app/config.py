@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # --- Server ---
     host: str = Field(default="0.0.0.0", description="Server host")
     port: int = Field(default=8000, description="Server port")
+    rate_limit_per_minute: int = Field(default=120, description="Max requests per minute per IP")
+
+    # --- Security & Admin Auth ---
+    admin_username: str = Field(default="admin", description="Admin username")
+    admin_password: str = Field(default="admin123", description="Admin password")
+    secret_key: str = Field(default="trueface_secret_key_2026_secure_token", description="JWT/Session secret key")
+
 
     # --- Face Detection ---
     detection_confidence_threshold: float = Field(

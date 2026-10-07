@@ -2,10 +2,13 @@ import { useLocation } from 'react-router-dom'
 
 const pageTitles = {
   '/': { title: 'Dashboard', subtitle: 'System Overview' },
-  '/register': { title: 'Register User', subtitle: 'Enroll New Identity' },
-  '/authenticate': { title: 'Live Authentication', subtitle: 'Verify Identity' },
+  '/register': { title: 'Enroll User', subtitle: 'Biometric Registration' },
+  '/authenticate': { title: 'Verify Identity', subtitle: 'Live Face Verification' },
   '/users': { title: 'Registered Users', subtitle: 'Identity Database' },
+  '/audit-logs': { title: 'Audit Logs', subtitle: 'Security Event History' },
+  '/system-status': { title: 'System Status', subtitle: 'Model & Pipeline Health' },
 }
+
 
 function Navbar({ onMenuClick }) {
   const location = useLocation()
