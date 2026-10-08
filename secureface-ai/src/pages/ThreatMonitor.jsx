@@ -146,7 +146,17 @@ function ThreatMonitor() {
       </div>
 
       {/* Charts Row */}
-      <div className="threat-charts-row mb-24">
+      {/* Analytics Section */}
+<div className="threat-analytics-heading">
+  <div>
+    <h2>Security Analytics</h2>
+    <p>Analyze threat patterns and security activity.</p>
+  </div>
+  <span>↓ Scroll for more</span>
+</div>
+
+{/* Charts Row */}
+<div className="threat-charts-row mb-24">
         <ThreatDistribution data={distributionData} />
         <ThreatTrendChart
           data={trendData[trendRange]}
