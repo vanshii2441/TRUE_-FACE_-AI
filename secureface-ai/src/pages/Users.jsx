@@ -24,6 +24,7 @@ function Users() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [resetting, setResetting] = useState(false)
+  const [selectedUser, setSelectedUser] = useState(null)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
@@ -466,9 +467,19 @@ function Users() {
                 <tbody>
                   {filteredUsers.map((user) => (
                     <tr
-                      key={user.faiss_id || user.user_id}
-                    >
-                      <td>
+  key={user.faiss_id || user.user_id}
+  className="users-table-row"
+  title={`View details for ${user.name}`}
+  onClick={() => setSelectedUser(user)}
+  tabIndex={0}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      setSelectedUser(user)
+    }
+  }}
+>
+<td>
                         <span
                           style={{
                             fontFamily: 'monospace',
@@ -523,6 +534,110 @@ function Users() {
             </div>
           )}
       </section>
+        {!loading &&
+          !error &&
+          filteredUsers.length > 0 && (
+            <div
+              className="table-container animate-in animate-delay-2"
+              id="users-table"
+            >
+              <table className="table">
+                ...
+              </table>
+            </div>
+          )}
+                {/* Selected User Details */}
+      {selectedUser && (
+        <div className="user-details-overlay">
+          <div className="user-details-panel">
+
+            <div className="user-details-header">
+              <div>
+                <span className="badge badge-success">
+                  <span className="status-dot online" />
+                  Active Identity
+                </span>
+
+                <h2>{selectedUser.name}</h2>
+
+                <p>
+                  Registered biometric identity details
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="users-search-clear"
+                onClick={() => setSelectedUser(null)}
+                aria-label="Close user details"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="user-details-grid">
+
+              <div className="user-detail-item">
+                <span className="user-detail-label">User ID</span>
+                <strong>{selectedUser.user_id || 'N/A'}</strong>
+              </div>
+
+              <div className="user-detail-item">
+                <span className="user-detail-label">FAISS ID</span>
+                <strong>
+                  #{selectedUser.faiss_id ?? 'N/A'}
+                </strong>
+              </div>
+
+              <div className="user-detail-item">
+                <span className="user-detail-label">Enrollment Status</span>
+                <strong className="user-detail-success">
+                  Enrolled & Active
+                </strong>
+              </div>
+
+              <div className="user-detail-item">
+                <span className="user-detail-label">Embedding</span>
+                <strong>512-D Vector</strong>
+              </div>
+
+              <div className="user-detail-item">
+                <span className="user-detail-label">
+                  Anti-Spoofing
+                </span>
+                <strong className="user-detail-success">
+                  Protected
+                </strong>
+              </div>
+
+              <div className="user-detail-item">
+                <span className="user-detail-label">
+                  Enrolled On
+                </span>
+                <strong>
+                  {formatDate(selectedUser.enrolled_at)}
+                </strong>
+              </div>
+
+            </div>
+
+            <div className="user-details-footer">
+              <span>
+                Identity available for 1:N facial recognition.
+              </span>
+
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setSelectedUser(null)}
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   )
 }
