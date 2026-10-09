@@ -188,10 +188,10 @@ async def get_detailed_health() -> DetailedHealthResponse:
         det = get_face_detector()
         det_device = str(getattr(det, "device", "cpu"))
         if not det.is_loaded:
-            det_status = "MODEL_UNAVAILABLE"
+            det_status = "UNAVAILABLE"
             det_reason = "MTCNN face detector failed to initialize."
     except Exception as e:
-        det_status = "MODEL_UNAVAILABLE"
+        det_status = "UNAVAILABLE"
         det_reason = f"MTCNN initialization error: {e}"
 
     emb_status = "ONLINE"
@@ -201,10 +201,10 @@ async def get_detailed_health() -> DetailedHealthResponse:
         emb = get_face_embedder()
         emb_pretrained = getattr(emb, "pretrained", "vggface2")
         if not emb.is_loaded:
-            emb_status = "MODEL_UNAVAILABLE"
+            emb_status = "UNAVAILABLE"
             emb_reason = "InceptionResNetV1 embedding model failed to initialize."
     except Exception as e:
-        emb_status = "MODEL_UNAVAILABLE"
+        emb_status = "UNAVAILABLE"
         emb_reason = f"InceptionResNetV1 initialization error: {e}"
 
     liv_status = "ONLINE"
@@ -212,14 +212,14 @@ async def get_detailed_health() -> DetailedHealthResponse:
     try:
         liv = get_liveness_detector()
         if not liv.is_loaded:
-            liv_status = "MODEL_UNAVAILABLE"
+            liv_status = "UNAVAILABLE"
             liv_reason = getattr(
                 liv,
                 "load_reason",
                 f"Model weights checkpoint file not found at '{settings.liveness_model_path}'.",
             )
     except Exception as e:
-        liv_status = "MODEL_UNAVAILABLE"
+        liv_status = "UNAVAILABLE"
         liv_reason = f"LivenessNet initialization error: {e}"
 
     df_status = "ONLINE"
@@ -227,14 +227,14 @@ async def get_detailed_health() -> DetailedHealthResponse:
     try:
         df = get_deepfake_detector()
         if not df.is_loaded:
-            df_status = "MODEL_UNAVAILABLE"
+            df_status = "UNAVAILABLE"
             df_reason = getattr(
                 df,
                 "load_reason",
                 f"Model weights checkpoint file not found at '{settings.deepfake_model_path}'.",
             )
     except Exception as e:
-        df_status = "MODEL_UNAVAILABLE"
+        df_status = "UNAVAILABLE"
         df_reason = f"DeepfakeNet initialization error: {e}"
 
     # Check FAISS vector store
@@ -252,7 +252,7 @@ async def get_detailed_health() -> DetailedHealthResponse:
         legacy_status = "DEGRADED"
     else:
         overall_status = "SYSTEM_DEGRADED"
-        legacy_status = "OFFLINE"
+        legacy_status = "DEGRADED"
 
     uptime_sec = round(time.time() - START_TIME, 1)
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -289,14 +289,14 @@ async def get_detailed_health() -> DetailedHealthResponse:
         "liveness": {
             "name": "LivenessNet Anti-Spoofing",
             "status": liv_status,
-            "metric": "Pre-trained Weights" if liv_status == "ONLINE" else "Fallback Mode",
+            "metric": "Pre-trained Weights" if liv_status == "ONLINE" else "Weights Unavailable",
             "details": "LivenessNet CNN passive anti-spoofing classifier",
             "reason": liv_reason,
         },
         "deepfake": {
             "name": "DeepfakeNet Synthetic Detector",
             "status": df_status,
-            "metric": "Pre-trained Weights" if df_status == "ONLINE" else "Fallback Mode",
+            "metric": "Pre-trained Weights" if df_status == "ONLINE" else "Weights Unavailable",
             "details": "DeepfakeNet CNN synthetic face analysis layer",
             "reason": df_reason,
         },

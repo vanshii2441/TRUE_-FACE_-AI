@@ -534,19 +534,7 @@ function Users() {
             </div>
           )}
       </section>
-        {!loading &&
-          !error &&
-          filteredUsers.length > 0 && (
-            <div
-              className="table-container animate-in animate-delay-2"
-              id="users-table"
-            >
-              <table className="table">
-                ...
-              </table>
-            </div>
-          )}
-                {/* Selected User Details */}
+      {/* Selected User Details */}
       {selectedUser && (
         <div className="user-details-overlay">
           <div className="user-details-panel">

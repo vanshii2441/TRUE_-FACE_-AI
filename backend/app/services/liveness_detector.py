@@ -127,12 +127,23 @@ class LivenessDetector:
             face_crop_bgr: BGR face image crop.
 
         Returns:
-            Dictionary containing:
-                - liveness_score: float (Probability of REAL in [0.0, 1.0])
-                - spoof_score: float (Probability of SPOOF in [0.0, 1.0])
-                - is_live: bool (True if liveness_score >= threshold)
-                - liveness_status: str ("REAL" or "SPOOF")
+            Dictionary containing liveness evaluation results.
         """
+        if face_crop_bgr is None or face_crop_bgr.size == 0:
+            raise LivenessDetectorError("Invalid empty face crop provided for liveness evaluation.")
+
+        if not self.is_weights_loaded:
+            logger.warning("LivenessDetector: Model weights checkpoint not loaded. Returning UNAVAILABLE result.")
+            return {
+                "liveness_score": 0.0,
+                "spoof_score": 1.0,
+                "is_live": False,
+                "liveness_status": "UNAVAILABLE",
+                "threshold": self.threshold,
+                "weights_loaded": False,
+                "reason": f"Model weights checkpoint not found at '{self.model_path}'.",
+            }
+
         tensor = self.preprocess(face_crop_bgr)
 
         with torch.no_grad():
@@ -149,6 +160,7 @@ class LivenessDetector:
             "is_live": is_live,
             "liveness_status": status,
             "threshold": self.threshold,
+            "weights_loaded": True,
         }
 
 

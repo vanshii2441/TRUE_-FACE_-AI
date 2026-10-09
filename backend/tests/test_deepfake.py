@@ -69,7 +69,7 @@ def test_deepfake_predict_keys(deepfake_detector_instance, sample_face_crop):
 
     assert 0.0 <= res["deepfake_probability"] <= 1.0
     assert 0.0 <= res["real_probability"] <= 1.0
-    assert res["deepfake_status"] in {"REAL", "DEEPFAKE"}
+    assert res["deepfake_status"] in {"REAL", "DEEPFAKE", "UNAVAILABLE"}
     assert isinstance(res["is_deepfake"], bool)
 
 

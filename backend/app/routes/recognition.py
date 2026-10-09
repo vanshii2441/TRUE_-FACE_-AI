@@ -132,6 +132,12 @@ async def enroll_face(
     liveness_ms = (t_liv_end - t_liv_start) * 1000.0
     logger.info("Enrollment liveness score for user %s: %.4f (is_live=%s, %.2fms)", user_id, liveness_res["liveness_score"], liveness_res["is_live"], liveness_ms)
 
+    if settings.enable_liveness_check and liveness_res.get("liveness_status") == "UNAVAILABLE":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Liveness detection model is unavailable (checkpoint missing). Enrollment cannot proceed.",
+        )
+
     if settings.enable_liveness_check and not liveness_res["is_live"]:
         logger.warning(
             "Enrollment rejected due to spoof detection for user %s (Liveness score: %.4f)",
@@ -153,6 +159,12 @@ async def enroll_face(
     t_df_end = time.perf_counter()
     deepfake_ms = (t_df_end - t_df_start) * 1000.0
     logger.info("Enrollment deepfake prob for user %s: %.4f (is_deepfake=%s, %.2fms)", user_id, deepfake_res["deepfake_probability"], deepfake_res["is_deepfake"], deepfake_ms)
+
+    if settings.enable_deepfake_check and deepfake_res.get("deepfake_status") == "UNAVAILABLE":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Deepfake detection model is unavailable (checkpoint missing). Enrollment cannot proceed.",
+        )
 
     if settings.enable_deepfake_check and deepfake_res["is_deepfake"]:
         logger.warning(

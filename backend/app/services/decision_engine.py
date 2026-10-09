@@ -155,27 +155,42 @@ class AuthenticationDecisionEngine:
         is_live = (liv_score >= liv_thresh) and (liveness_res.get("is_live", True) if liveness_res else True)
 
         # 4. Anti-Spoofing Liveness Check
-        if self.cfg.enable_liveness_check and liveness_res and not is_live:
-            logger.warning(
-                "Decision Engine: Liveness failed (Score: %.4f < Threshold: %.4f)",
-                liv_score,
-                liv_thresh,
-            )
-            return DecisionOutcome(
-                final_decision="LIVENESS_FAILED",
-                status="LIVENESS_FAILED",
-                is_authenticated=False,
-                identity=None,
-                explanation=(
-                    f"Authentication failed because liveness score ({liv_score * 100:.1f}%) "
-                    f"was below required threshold ({liv_thresh * 100:.1f}%). Presentation attack suspected."
-                ),
-                reasons=[f"Liveness anti-spoofing score {liv_score:.4f} failed cutoff threshold {liv_thresh:.4f}."],
-                quality_score=q_score,
-                blur_score=b_score,
-                is_quality_passed=q_passed,
-                liveness_score=liv_score,
-            )
+        if self.cfg.enable_liveness_check and liveness_res:
+            if liveness_res.get("liveness_status") == "UNAVAILABLE":
+                logger.warning("Decision Engine: Liveness model is unavailable.")
+                return DecisionOutcome(
+                    final_decision="MODEL_UNAVAILABLE",
+                    status="MODEL_UNAVAILABLE",
+                    is_authenticated=False,
+                    identity=None,
+                    explanation="Authentication failed: Liveness anti-spoofing model is unavailable (weights checkpoint missing).",
+                    reasons=[liveness_res.get("reason", "LivenessNet model weights not loaded.")],
+                    quality_score=q_score,
+                    blur_score=b_score,
+                    is_quality_passed=q_passed,
+                    liveness_score=0.0,
+                )
+            if not is_live:
+                logger.warning(
+                    "Decision Engine: Liveness failed (Score: %.4f < Threshold: %.4f)",
+                    liv_score,
+                    liv_thresh,
+                )
+                return DecisionOutcome(
+                    final_decision="LIVENESS_FAILED",
+                    status="LIVENESS_FAILED",
+                    is_authenticated=False,
+                    identity=None,
+                    explanation=(
+                        f"Authentication failed because liveness score ({liv_score * 100:.1f}%) "
+                        f"was below required threshold ({liv_thresh * 100:.1f}%). Presentation attack suspected."
+                    ),
+                    reasons=[f"Liveness anti-spoofing score {liv_score:.4f} failed cutoff threshold {liv_thresh:.4f}."],
+                    quality_score=q_score,
+                    blur_score=b_score,
+                    is_quality_passed=q_passed,
+                    liveness_score=liv_score,
+                )
 
         # Extract deepfake metrics
         df_prob = deepfake_res.get("deepfake_probability", 0.0) if deepfake_res else 0.0
@@ -183,28 +198,44 @@ class AuthenticationDecisionEngine:
         is_deepfake = (df_prob >= df_thresh) or (deepfake_res.get("is_deepfake", False) if deepfake_res else False)
 
         # 5. Deepfake Synthetic Detection Check
-        if self.cfg.enable_deepfake_check and deepfake_res and is_deepfake:
-            logger.warning(
-                "Decision Engine: Deepfake detected (Prob: %.4f >= Threshold: %.4f)",
-                df_prob,
-                df_thresh,
-            )
-            return DecisionOutcome(
-                final_decision="DEEPFAKE_SUSPECTED",
-                status="DEEPFAKE_SUSPECTED",
-                is_authenticated=False,
-                identity=None,
-                explanation=(
-                    f"Authentication failed because deepfake probability ({df_prob * 100:.1f}%) "
-                    f"exceeded threshold ({df_thresh * 100:.1f}%). AI synthetic face manipulation detected."
-                ),
-                reasons=[f"DeepfakeNet flagged face image with deepfake probability {df_prob:.4f} (threshold {df_thresh:.4f})."],
-                quality_score=q_score,
-                blur_score=b_score,
-                is_quality_passed=q_passed,
-                liveness_score=liv_score,
-                deepfake_probability=df_prob,
-            )
+        if self.cfg.enable_deepfake_check and deepfake_res:
+            if deepfake_res.get("deepfake_status") == "UNAVAILABLE":
+                logger.warning("Decision Engine: Deepfake model is unavailable.")
+                return DecisionOutcome(
+                    final_decision="MODEL_UNAVAILABLE",
+                    status="MODEL_UNAVAILABLE",
+                    is_authenticated=False,
+                    identity=None,
+                    explanation="Authentication failed: Deepfake detection model is unavailable (weights checkpoint missing).",
+                    reasons=[deepfake_res.get("reason", "DeepfakeNet model weights not loaded.")],
+                    quality_score=q_score,
+                    blur_score=b_score,
+                    is_quality_passed=q_passed,
+                    liveness_score=liv_score,
+                    deepfake_probability=0.0,
+                )
+            if is_deepfake:
+                logger.warning(
+                    "Decision Engine: Deepfake detected (Prob: %.4f >= Threshold: %.4f)",
+                    df_prob,
+                    df_thresh,
+                )
+                return DecisionOutcome(
+                    final_decision="DEEPFAKE_SUSPECTED",
+                    status="DEEPFAKE_SUSPECTED",
+                    is_authenticated=False,
+                    identity=None,
+                    explanation=(
+                        f"Authentication failed because deepfake probability ({df_prob * 100:.1f}%) "
+                        f"exceeded threshold ({df_thresh * 100:.1f}%). AI synthetic face manipulation detected."
+                    ),
+                    reasons=[f"DeepfakeNet flagged face image with deepfake probability {df_prob:.4f} (threshold {df_thresh:.4f})."],
+                    quality_score=q_score,
+                    blur_score=b_score,
+                    is_quality_passed=q_passed,
+                    liveness_score=liv_score,
+                    deepfake_probability=df_prob,
+                )
 
         # 6. Empty Vector Store Check
         if total_enrolled == 0:

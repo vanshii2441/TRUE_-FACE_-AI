@@ -1,19 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { getAnalyticsOverview, getDetailedHealth } from '../services/api'
+import { getAnalyticsOverview, getDetailedHealth, getVerificationHistory } from '../services/api'
 import SecurityAlert from '../components/threat/SecurityAlert'
 import ThreatSources from '../components/threat/ThreatSources'
-import { alerts, threatSources } from '../data/threatData'
 
 function Home() {
-    const scrollToAnalytics = () => {
+  const scrollToAnalytics = () => {
     document.getElementById('dashboard-analytics')?.scrollIntoView({
       behavior: 'smooth',
       block: 'start',
     })
   }
+
   const [stats, setStats] = useState(null)
   const [health, setHealth] = useState(null)
+  const [recentLogs, setRecentLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -21,12 +22,14 @@ function Home() {
     setLoading(true)
     setError(null)
     try {
-      const [analyticsData, healthData] = await Promise.all([
+      const [analyticsData, healthData, historyData] = await Promise.all([
         getAnalyticsOverview(),
         getDetailedHealth(),
+        getVerificationHistory(50).catch(() => ({ history: [] })),
       ])
       setStats(analyticsData)
       setHealth(healthData)
+      setRecentLogs(historyData.history || [])
     } catch (err) {
       console.error('Error fetching dashboard overview:', err)
       setError('Backend server disconnected. Please verify FastAPI backend service is active.')
@@ -39,6 +42,28 @@ function Home() {
     fetchDashboardData()
   }, [fetchDashboardData])
 
+  // Derive genuine security alerts from recent audit logs
+  const alerts = recentLogs
+    .filter((log) => !log.is_authenticated)
+    .slice(0, 5)
+    .map((log, idx) => ({
+      id: log.id || idx + 1,
+      riskLevel: log.final_decision === 'DEEPFAKE_SUSPECTED' || log.final_decision === 'LIVENESS_FAILED' ? 'High' : 'Medium',
+      title: `${log.final_decision.replace('_', ' ')} Detected`,
+      source: log.identity || (log.user_id ? `User ${log.user_id}` : 'Terminal 01'),
+      time: log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+    }))
+
+  // Derive genuine threat sources from recent audit logs
+  const sourceCounts = {}
+  recentLogs.forEach((log) => {
+    const src = log.identity || (log.user_id ? `User ${log.user_id}` : 'Terminal 01')
+    sourceCounts[src] = (sourceCounts[src] || 0) + 1
+  })
+  const threatSources = Object.entries(sourceCounts)
+    .map(([name, count]) => ({ name, count, max: Math.max(10, count) }))
+    .slice(0, 5)
+
   return (
     <div className="animate-in" style={{ paddingBottom: '40px' }}>
       {/* Header */}
@@ -50,23 +75,23 @@ function Home() {
           Real-time biometric security metrics, user enrollment analytics, AI model readiness matrix, and authentication performance indicators.
         </p>
         <button
-  className="btn btn-secondary dashboard-scroll-btn"
-  onClick={scrollToAnalytics}
-  id="dashboard-scroll-analytics"
->
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M12 5v14" />
-    <path d="m19 12-7 7-7-7" />
-  </svg>
-  Explore System Analytics
-</button>
+          className="btn btn-secondary dashboard-scroll-btn"
+          onClick={scrollToAnalytics}
+          id="dashboard-scroll-analytics"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 5v14" />
+            <path d="m19 12-7 7-7-7" />
+          </svg>
+          Explore System Analytics
+        </button>
       </div>
 
       {error && (
@@ -77,8 +102,8 @@ function Home() {
 
       {/* Primary Analytics Metric Cards */}
       <div className="section-title" id="dashboard-analytics">
-  Biometric System Analytics Overview
-</div>
+        Biometric System Analytics Overview
+      </div>
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
           Loading real-time system metrics...
@@ -169,13 +194,12 @@ function Home() {
         </div>
       )}
 
-            {/* Dashboard Security Insights */}
-      {stats && (
+      {/* Dashboard Security Insights */}
+      {stats && health && (
         <>
           <div className="section-title">Security & AI Insights</div>
 
           <div className="dashboard-insights-grid">
-
             {/* Security Posture */}
             <div className="card dashboard-insight-card">
               <div className="dashboard-insight-header">
@@ -190,8 +214,8 @@ function Home() {
               </div>
 
               <div className="insight-status">
-                <span className="status-dot online" />
-                <strong>Protected</strong>
+                <span className={`status-dot ${health.status === 'ONLINE' ? 'online' : 'offline'}`} />
+                <strong>{health.overall_status === 'ALL_SYSTEMS_OPERATIONAL' ? 'Protected' : health.overall_status === 'PARTIALLY_OPERATIONAL' ? 'Partially Protected' : 'Degraded'}</strong>
               </div>
 
               <div className="insight-progress">
@@ -253,51 +277,52 @@ function Home() {
 
               <div className="pipeline-status-list">
                 <div>
-                  <span className="status-dot online" />
+                  <span className={`status-dot ${health.face_detection_model_status === 'ONLINE' ? 'online' : 'offline'}`} />
                   <span>Face Detection</span>
-                  <strong>MTCNN</strong>
+                  <strong>{health.face_detection_model_status}</strong>
                 </div>
 
                 <div>
-                  <span className="status-dot online" />
+                  <span className={`status-dot ${health.liveness_model_status === 'ONLINE' ? 'online' : 'offline'}`} />
                   <span>Anti-Spoofing</span>
-                  <strong>LivenessNet</strong>
+                  <strong>{health.liveness_model_status}</strong>
                 </div>
 
                 <div>
-                  <span className="status-dot online" />
+                  <span className={`status-dot ${health.deepfake_model_status === 'ONLINE' ? 'online' : 'offline'}`} />
                   <span>Deepfake Analysis</span>
-                  <strong>DeepfakeNet</strong>
+                  <strong>{health.deepfake_model_status}</strong>
                 </div>
               </div>
             </div>
-          
-
-
           </div>
         </>
       )}
 
       {/* Threat Intelligence */}
-<div className="section-title">
-  Threat Intelligence
-</div>
+      <div className="section-title">
+        Threat Intelligence
+      </div>
 
-<div className="dashboard-threat-grid">
+      <div className="dashboard-threat-grid">
+        {threatSources.length > 0 ? (
+          <ThreatSources sources={threatSources} />
+        ) : (
+          <div className="card" style={{ padding: '20px', color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
+            No threat sources recorded.
+          </div>
+        )}
 
-  <ThreatSources
-    sources={threatSources}
-  />
+        {alerts.length > 0 ? (
+          <SecurityAlert alerts={alerts} />
+        ) : (
+          <div className="card" style={{ padding: '20px', color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
+            No security alerts recorded.
+          </div>
+        )}
+      </div>
 
-  <SecurityAlert
-    alerts={alerts.slice(0, 5)}
-  />
-
-
-
-</div>
-
-      {/* Quick Actions */}
+      {/* Primary Navigation */}
       <div className="section-title">Primary Navigation</div>
       <div className="quick-actions mb-24">
         <Link to="/authenticate" className="btn btn-primary" id="action-verify-identity">
@@ -375,7 +400,8 @@ function Home() {
           </div>
         </div>
       )}
-            <button
+
+      <button
         className="dashboard-back-to-top"
         onClick={() =>
           window.scrollTo({

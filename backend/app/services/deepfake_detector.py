@@ -127,14 +127,23 @@ class DeepfakeDetector:
             face_crop_bgr: BGR face image crop.
 
         Returns:
-            Dictionary containing:
-                - deepfake_probability: float (Probability of DEEPFAKE in [0.0, 1.0])
-                - real_probability: float (Probability of REAL in [0.0, 1.0])
-                - is_deepfake: bool (True if deepfake_probability >= threshold)
-                - deepfake_status: str ("DEEPFAKE" or "REAL")
-                - threshold: float
-                - weights_loaded: bool
+            Dictionary containing deepfake evaluation results.
         """
+        if face_crop_bgr is None or face_crop_bgr.size == 0:
+            raise DeepfakeDetectorError("Invalid empty face crop provided for deepfake evaluation.")
+
+        if not self.is_weights_loaded:
+            logger.warning("DeepfakeDetector: Model weights checkpoint not loaded. Returning UNAVAILABLE result.")
+            return {
+                "deepfake_probability": 0.0,
+                "real_probability": 0.0,
+                "is_deepfake": False,
+                "deepfake_status": "UNAVAILABLE",
+                "threshold": self.threshold,
+                "weights_loaded": False,
+                "reason": f"Model weights checkpoint not found at '{self.model_path}'.",
+            }
+
         tensor = self.preprocess(face_crop_bgr)
 
         with torch.no_grad():
@@ -151,7 +160,7 @@ class DeepfakeDetector:
             "is_deepfake": is_deepfake,
             "deepfake_status": status,
             "threshold": self.threshold,
-            "weights_loaded": self.is_weights_loaded,
+            "weights_loaded": True,
         }
 
 
