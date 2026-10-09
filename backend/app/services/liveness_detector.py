@@ -6,6 +6,7 @@ presentation attacks (printed photos, video replays, screen captures).
 """
 
 import logging
+from pathlib import Path
 import os
 from typing import Any, Optional
 
@@ -32,6 +33,7 @@ class LivenessDetector:
     or presentation attacks (SPOOF).
     """
 
+    
     def __init__(
         self,
         model_path: Optional[str] = None,
@@ -39,16 +41,43 @@ class LivenessDetector:
         input_size: Optional[int] = None,
         device: Optional[str] = None,
     ) -> None:
-        self.model_path = model_path if model_path is not None else settings.liveness_model_path
-        self.threshold = threshold if threshold is not None else settings.liveness_threshold
-        self.input_size = input_size if input_size is not None else settings.liveness_input_size
+        configured_model_path = (
+            model_path
+            if model_path is not None
+            else settings.liveness_model_path
+        )
+
+        path = Path(configured_model_path)
+
+        if not path.is_absolute():
+            project_root = Path(__file__).resolve().parents[3]
+            path = project_root / path
+
+        self.model_path = str(path.resolve())
+
+        self.threshold = (
+            threshold
+            if threshold is not None
+            else settings.liveness_threshold
+        )
+        self.input_size = (
+            input_size
+            if input_size is not None
+            else settings.liveness_input_size
+        )
 
         if device:
             self.device = torch.device(device)
         else:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.device = torch.device(
+                "cuda" if torch.cuda.is_available() else "cpu"
+            )
 
-        logger.info("Initializing LivenessDetector on device: %s", self.device)
+        logger.info(
+            "Initializing LivenessDetector on device: %s",
+            self.device,
+        )
+
         self.model = LivenessNet(num_classes=2).to(self.device)
         self.is_weights_loaded = False
         self.load_weights()
