@@ -330,18 +330,94 @@ function Authenticate() {
                   border: '1px solid var(--border-color)',
                 }}
               >
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  style={{
-                    width: '100%',
-                    maxHeight: '380px',
-                    objectFit: 'cover',
-                    display: cameraActive ? 'block' : 'none',
-                  }}
-                />
+                
+<video
+  ref={videoRef}
+  autoPlay
+  playsInline
+  muted
+  onLoadedMetadata={(e) => {
+    e.currentTarget.play().catch((err) => {
+      console.error('Camera playback failed:', err)
+    })
+  }}
+  style={{
+    width: '100%',
+    maxHeight: '380px',
+    aspectRatio: '16 / 9',
+    objectFit: 'cover',
+    display: cameraActive ? 'block' : 'none',
+  }}
+/>
+
+{/* Face positioning guide */}
+{cameraActive && (
+  <>
+    <div
+      style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: 'clamp(150px, 42%, 230px)',
+        height: 'clamp(200px, 65%, 310px)',
+        border: '2px dashed rgba(45, 212, 191, 0.95)',
+        borderRadius: '50%',
+        pointerEvents: 'none',
+        boxShadow: '0 0 0 999px rgba(0, 0, 0, 0.12)',
+      }}
+    />
+
+    {/* Live camera status */}
+    <div
+      style={{
+        position: 'absolute',
+        top: '14px',
+        right: '14px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '7px',
+        padding: '7px 11px',
+        borderRadius: '20px',
+        background: 'rgba(0, 0, 0, 0.7)',
+        color: '#ffffff',
+        fontSize: '12px',
+        fontWeight: 600,
+        pointerEvents: 'none',
+      }}
+    >
+      <span
+        style={{
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          background: '#34d399',
+          boxShadow: '0 0 8px #34d399',
+        }}
+      />
+      CAMERA LIVE
+    </div>
+
+    {/* Positioning instruction */}
+    <div
+      style={{
+        position: 'absolute',
+        bottom: '14px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        padding: '7px 12px',
+        borderRadius: '8px',
+        background: 'rgba(0, 0, 0, 0.7)',
+        color: '#ffffff',
+        fontSize: '12px',
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
+      }}
+    >
+      Position your face inside the oval
+    </div>
+  </>
+)}
                 <canvas ref={canvasRef} style={{ display: 'none' }} />
 
                 {!cameraActive && (
