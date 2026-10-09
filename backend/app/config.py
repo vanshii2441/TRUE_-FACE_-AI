@@ -135,10 +135,17 @@ class Settings(BaseSettings):
         description="Toggle deepfake synthetic face detection gating during face recognition",
     )
 
+    # --- Database ---
+    mongodb_uri: str = Field(
+        default="",
+        description="MongoDB Atlas connection URI string",
+    )
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
+        "extra": "ignore",
     }
 
 
