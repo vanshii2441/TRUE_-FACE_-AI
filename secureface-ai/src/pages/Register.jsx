@@ -5,6 +5,13 @@ function Register() {
   const [formData, setFormData] = useState({ userId: '', name: '', email: '' })
   const [formErrors, setFormErrors] = useState({})
 
+  const [otp, setOtp] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpMessage, setOtpMessage] = useState('')
+
+
   const [inputMode, setInputMode] = useState('upload') // 'upload' | 'camera'
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
@@ -135,6 +142,22 @@ function Register() {
     }
   }
 
+  const handleSendOtp = async () => {
+    if (!formData.email.trim()) return
+    setOtpLoading(true)
+    setOtpMessage('')
+    setOtpSent(true)
+    setOtpLoading(false)
+  }
+
+  const handleVerifyOtp = async () => {
+    if (otp.length !== 6) return
+    setOtpLoading(true)
+    setOtpMessage('')
+    // otpVerified is kept false until real backend API integration
+    setOtpLoading(false)
+  }
+
   const validateForm = () => {
     const errors = {}
     const userIdClean = formData.userId.trim()
@@ -153,7 +176,9 @@ function Register() {
       errors.name = 'Full Name must be at least 2 characters.'
     }
 
-    if (emailClean && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) {
+    if (!emailClean) {
+      errors.email = 'Email Address is required.'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) {
       errors.email = 'Please enter a valid email address.'
     }
 
@@ -214,7 +239,7 @@ function Register() {
       clearTimeout(t4)
 
       setStatus('error')
-      
+
       // Parse structured error detail
       const errMsg = err.message || 'Enrollment request failed.'
       setApiError(errMsg)
@@ -296,7 +321,7 @@ function Register() {
             {/* Email / Identifier */}
             <div className="form-group">
               <label className="form-label" htmlFor="email">
-                Email Address <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>(Optional)</span>
+                Email Address <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 className={`form-input ${formErrors.email ? 'error' : ''}`}
@@ -314,6 +339,74 @@ function Register() {
                 </div>
               )}
             </div>
+
+            {/* Email OTP Verification */}
+            <div className="form-group">
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+                disabled={!formData.email.trim() || otpLoading || otpVerified}
+                onClick={handleSendOtp}
+              >
+                Send OTP to Email
+              </button>
+
+              {otpSent && (
+                <>
+                  <label
+                    className="form-label"
+                    htmlFor="otp"
+                    style={{ marginTop: '12px' }}
+                  >
+                    Enter 6-digit OTP
+                  </label>
+
+                  <input
+                    className="form-input"
+                    type="text"
+                    id="otp"
+                    name="otp"
+                    placeholder="Enter OTP"
+                    value={otp}
+                    maxLength={6}
+                    inputMode="numeric"
+                    onChange={(e) =>
+                      setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    className="btn btn-primary mt-8"
+                    style={{ width: '100%' }}
+                    disabled={otp.length !== 6 || otpLoading}
+                    onClick={handleVerifyOtp}
+                  >
+                    Verify OTP
+                  </button>
+                </>
+              )}
+
+              {otpMessage && (
+                <p
+                  style={{
+                    fontSize: 'var(--font-xs)',
+                    marginTop: '8px',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {otpMessage}
+                </p>
+              )}
+
+              {otpVerified && (
+                <p style={{ color: '#10b981', fontSize: 'var(--font-xs)' }}>
+                  ✓ Email verified successfully
+                </p>
+              )}
+            </div>
+
 
             {formErrors.file && (
               <div style={{ padding: '10px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: '6px', color: '#ef4444', fontSize: 'var(--font-xs)', marginBottom: '12px' }}>
@@ -551,13 +644,13 @@ function Register() {
                       background: isCurrent
                         ? 'rgba(59,130,246,0.1)'
                         : isPassed
-                        ? 'rgba(16,185,129,0.06)'
-                        : 'var(--bg-secondary)',
+                          ? 'rgba(16,185,129,0.06)'
+                          : 'var(--bg-secondary)',
                       border: isCurrent
                         ? '1px solid var(--primary)'
                         : isPassed
-                        ? '1px solid rgba(16,185,129,0.3)'
-                        : '1px solid transparent',
+                          ? '1px solid rgba(16,185,129,0.3)'
+                          : '1px solid transparent',
                       transition: 'all 0.3s ease',
                     }}
                   >
