@@ -141,6 +141,33 @@ class Settings(BaseSettings):
         description="MongoDB Atlas connection URI string",
     )
 
+    # --- Email & OTP Verification ---
+    smtp_host: str = Field(
+        default="smtp.gmail.com",
+        description="SMTP server hostname",
+    )
+    smtp_port: int = Field(
+        default=587,
+        description="SMTP server TLS port",
+    )
+    smtp_user: str = Field(
+        default="",
+        description="SMTP username/email for sending notifications",
+    )
+    smtp_password: str = Field(
+        default="",
+        description="SMTP account password or app-specific password",
+    )
+    emails_from_email: str = Field(
+        default="",
+        description="Sender email address for OTP emails",
+    )
+    otp_expire_minutes: int = Field(
+        default=2,
+        gt=0,
+        description="OTP expiration duration in minutes",
+    )
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
