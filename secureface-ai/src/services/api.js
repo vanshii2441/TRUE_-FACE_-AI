@@ -310,6 +310,50 @@ export async function updateThresholds(thresholds, token) {
   }
 }
 
+/**
+ * Dispatch Email OTP to the specified recipient.
+ * POST /api/v1/otp/send
+ */
+export async function sendOtp(email) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/otp/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || data.error || 'Failed to send verification OTP')
+    }
+    return data
+  } catch (error) {
+    console.error('Error sending OTP:', error)
+    throw error
+  }
+}
+
+/**
+ * Verify 6-digit Email OTP code.
+ * POST /api/v1/otp/verify
+ */
+export async function verifyOtp(email, otp) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/v1/otp/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(data.detail || data.error || 'OTP verification failed')
+    }
+    return data
+  } catch (error) {
+    console.error('Error verifying OTP:', error)
+    throw error
+  }
+}
+
 export default {
   registerUser,
   recognizeFace,
@@ -326,6 +370,8 @@ export default {
   getDetailedHealth,
   getThresholds,
   updateThresholds,
+  sendOtp,
+  verifyOtp,
 }
 
 

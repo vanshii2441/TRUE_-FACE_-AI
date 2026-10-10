@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { registerUser } from '../services/api'
+import { registerUser, sendOtp, verifyOtp } from '../services/api'
 
 function Register() {
   const [formData, setFormData] = useState({ userId: '', name: '', email: '' })
@@ -140,22 +140,80 @@ function Register() {
     if (formErrors[name]) {
       setFormErrors((prev) => ({ ...prev, [name]: null }))
     }
+    if (name === 'email') {
+      // Reset OTP verification state if user alters their email address
+      setOtp('')
+      setOtpSent(false)
+      setOtpVerified(false)
+      setOtpMessage('')
+      if (formErrors.otp) {
+        setFormErrors((prev) => ({ ...prev, otp: null }))
+      }
+    }
   }
 
   const handleSendOtp = async () => {
-    if (!formData.email.trim()) return
+    const emailClean = formData.email.trim()
+    if (!emailClean) {
+      setFormErrors((prev) => ({ ...prev, email: 'Email Address is required to send OTP.' }))
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) {
+      setFormErrors((prev) => ({ ...prev, email: 'Please enter a valid email address.' }))
+      return
+    }
+
     setOtpLoading(true)
-    setOtpMessage('')
-    setOtpSent(true)
-    setOtpLoading(false)
+    setOtpMessage('Sending OTP verification code...')
+    setApiError(null)
+
+    try {
+      const res = await sendOtp(emailClean)
+      setOtpSent(true)
+      setOtpVerified(false)
+      setOtpMessage(res.message || `OTP sent to ${emailClean}. Valid for 2 minutes.`)
+    } catch (err) {
+      console.error('Failed to send OTP:', err)
+      setOtpMessage('')
+      setFormErrors((prev) => ({
+        ...prev,
+        email: err.message || 'Failed to send OTP code. Please try again.',
+      }))
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   const handleVerifyOtp = async () => {
-    if (otp.length !== 6) return
+    const emailClean = formData.email.trim()
+    if (!emailClean) return
+    if (otp.length !== 6) {
+      setOtpMessage('OTP code must be 6 digits.')
+      return
+    }
+
     setOtpLoading(true)
-    setOtpMessage('')
-    // otpVerified is kept false until real backend API integration
-    setOtpLoading(false)
+    setOtpMessage('Verifying OTP code...')
+    setApiError(null)
+
+    try {
+      const res = await verifyOtp(emailClean, otp)
+      setOtpVerified(true)
+      setOtpMessage(res.message || 'Email verified successfully.')
+      if (formErrors.otp) {
+        setFormErrors((prev) => ({ ...prev, otp: null }))
+      }
+    } catch (err) {
+      console.error('Failed to verify OTP:', err)
+      setOtpVerified(false)
+      setOtpMessage('')
+      setFormErrors((prev) => ({
+        ...prev,
+        otp: err.message || 'Invalid or expired OTP. Please try again.',
+      }))
+    } finally {
+      setOtpLoading(false)
+    }
   }
 
   const validateForm = () => {
@@ -180,6 +238,8 @@ function Register() {
       errors.email = 'Email Address is required.'
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) {
       errors.email = 'Please enter a valid email address.'
+    } else if (!otpVerified) {
+      errors.otp = 'Please verify your email address using the 6-digit OTP before submitting registration.'
     }
 
     if (!selectedFile) {
@@ -230,6 +290,10 @@ function Register() {
 
       // Reset form
       setFormData({ userId: '', name: '', email: '' })
+      setOtp('')
+      setOtpSent(false)
+      setOtpVerified(false)
+      setOtpMessage('')
       setSelectedFile(null)
       setPreviewUrl(null)
     } catch (err) {
@@ -349,28 +413,37 @@ function Register() {
                 disabled={!formData.email.trim() || otpLoading || otpVerified}
                 onClick={handleSendOtp}
               >
-                Send OTP to Email
+                {otpLoading && !otpSent ? (
+                  'Sending OTP...'
+                ) : otpVerified ? (
+                  'Email Verified ✓'
+                ) : otpSent ? (
+                  'Resend OTP to Email'
+                ) : (
+                  'Send OTP to Email'
+                )}
               </button>
 
-              {otpSent && (
+              {otpSent && !otpVerified && (
                 <>
                   <label
                     className="form-label"
                     htmlFor="otp"
                     style={{ marginTop: '12px' }}
                   >
-                    Enter 6-digit OTP
+                    Enter 6-digit OTP <span style={{ color: '#ef4444' }}>*</span>
                   </label>
 
                   <input
-                    className="form-input"
+                    className={`form-input ${formErrors.otp ? 'error' : ''}`}
                     type="text"
                     id="otp"
                     name="otp"
-                    placeholder="Enter OTP"
+                    placeholder="Enter 6-digit OTP"
                     value={otp}
                     maxLength={6}
                     inputMode="numeric"
+                    disabled={otpLoading}
                     onChange={(e) =>
                       setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))
                     }
@@ -383,7 +456,7 @@ function Register() {
                     disabled={otp.length !== 6 || otpLoading}
                     onClick={handleVerifyOtp}
                   >
-                    Verify OTP
+                    {otpLoading ? 'Verifying...' : 'Verify OTP'}
                   </button>
                 </>
               )}
@@ -393,15 +466,21 @@ function Register() {
                   style={{
                     fontSize: 'var(--font-xs)',
                     marginTop: '8px',
-                    color: 'var(--text-secondary)',
+                    color: otpVerified ? '#10b981' : 'var(--text-secondary)',
                   }}
                 >
                   {otpMessage}
                 </p>
               )}
 
+              {formErrors.otp && (
+                <div style={{ fontSize: 'var(--font-xs)', color: '#ef4444', marginTop: '6px' }}>
+                  ⚠️ {formErrors.otp}
+                </div>
+              )}
+
               {otpVerified && (
-                <p style={{ color: '#10b981', fontSize: 'var(--font-xs)' }}>
+                <p style={{ color: '#10b981', fontSize: 'var(--font-xs)', marginTop: '6px', fontWeight: 600 }}>
                   ✓ Email verified successfully
                 </p>
               )}

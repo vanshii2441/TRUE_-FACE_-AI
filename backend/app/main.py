@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 from app.routes.admin import router as admin_router
 from app.routes.detection import router as detection_router
+from app.routes.otp import router as otp_router
 from app.routes.recognition import router as recognition_router
 
 from app.services.deepfake_detector import get_deepfake_detector
@@ -150,6 +151,7 @@ async def rate_limit_middleware(request: Request, call_next):
 app.include_router(detection_router)
 app.include_router(recognition_router)
 app.include_router(admin_router)
+app.include_router(otp_router)
 
 
 
