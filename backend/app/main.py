@@ -18,6 +18,7 @@ from app.routes.detection import router as detection_router
 from app.routes.otp import router as otp_router
 from app.routes.recognition import router as recognition_router
 
+from app.services.database import close_mongo_client, ensure_db_indexes
 from app.services.deepfake_detector import get_deepfake_detector
 from app.services.face_detector import get_face_detector
 from app.services.face_embedding import get_face_embedder
@@ -33,10 +34,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ── Lifespan: pre-load models at startup ──────────────────────
+# ── Lifespan: pre-load models and DB indexes at startup ───────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load MTCNN, InceptionResnetV1, LivenessNet, DeepfakeNet, and FAISS index at startup."""
+    """Load AI models, FAISS vector store, and verify database indexes at startup."""
     logger.info("Starting %s v%s", settings.app_name, settings.app_version)
     logger.info("Loading face detection model...")
     get_face_detector()
@@ -48,8 +49,20 @@ async def lifespan(app: FastAPI):
     get_deepfake_detector()
     logger.info("Loading FAISS vector store...")
     get_vector_store()
+
+    # Attempt database index initialization if MONGODB_URI is configured
+    try:
+        ensure_db_indexes()
+        logger.info("MongoDB indexes verified successfully.")
+    except Exception as e:
+        logger.warning(
+            "MongoDB startup initialization deferred: %s. OTP functionality requires active MongoDB connectivity.",
+            e,
+        )
+
     logger.info("All AI models and vector store ready.")
     yield
+    close_mongo_client()
     logger.info("Shutting down %s.", settings.app_name)
 
 
@@ -65,9 +78,11 @@ app = FastAPI(
 )
 
 # ── CORS ───────────────────────────────────────────────────────
+is_wildcard = "*" in settings.cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.cors_origins if not is_wildcard else ["*"],
+    allow_origin_regex=r"^https?://.*" if is_wildcard else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

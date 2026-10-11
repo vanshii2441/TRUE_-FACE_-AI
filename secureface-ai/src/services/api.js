@@ -4,7 +4,27 @@
  * Connects React Frontend to FastAPI AI backend endpoints.
  */
 
-const API_BASE_URL = 'http://127.0.0.1:8000'
+/**
+ * Resolves API Base URL across devices and environments.
+ * - Prioritizes Vite environment variable VITE_API_BASE_URL if configured.
+ * - Automatically falls back to current browser window hostname on port 8000 for multi-device/LAN testing.
+ * - Defaults to http://localhost:8000.
+ */
+export const getApiBaseUrl = () => {
+  if (import.meta.env?.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '')
+  }
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const protocol = window.location.protocol || 'http:'
+    const host = window.location.hostname
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return `${protocol}//${host}:8000`
+    }
+  }
+  return 'http://localhost:8000'
+}
+
+export const API_BASE_URL = getApiBaseUrl()
 
 /**
  * Register/enroll a user face with 512d ArcFace embedding and FAISS vector indexing.
@@ -321,12 +341,22 @@ export async function sendOtp(email) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     })
-    const data = await res.json()
+    let data
+    try {
+      data = await res.json()
+    } catch {
+      data = { detail: `Server returned HTTP ${res.status}` }
+    }
     if (!res.ok) {
-      throw new Error(data.detail || data.error || 'Failed to send verification OTP')
+      throw new Error(data.detail || data.error || data.message || 'Failed to send verification OTP')
     }
     return data
   } catch (error) {
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      const netErr = new Error(`Cannot connect to backend server at ${API_BASE_URL}. Verify backend is running and reachable over the network.`)
+      console.error('Network connection error:', netErr)
+      throw netErr
+    }
     console.error('Error sending OTP:', error)
     throw error
   }
@@ -343,12 +373,22 @@ export async function verifyOtp(email, otp) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, otp }),
     })
-    const data = await res.json()
+    let data
+    try {
+      data = await res.json()
+    } catch {
+      data = { detail: `Server returned HTTP ${res.status}` }
+    }
     if (!res.ok) {
-      throw new Error(data.detail || data.error || 'OTP verification failed')
+      throw new Error(data.detail || data.error || data.message || 'OTP verification failed')
     }
     return data
   } catch (error) {
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      const netErr = new Error(`Cannot connect to backend server at ${API_BASE_URL}. Verify backend is running and reachable over the network.`)
+      console.error('Network connection error:', netErr)
+      throw netErr
+    }
     console.error('Error verifying OTP:', error)
     throw error
   }

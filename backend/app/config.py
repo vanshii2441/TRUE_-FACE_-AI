@@ -5,8 +5,9 @@ Loads settings from environment variables with sensible defaults.
 Uses Pydantic BaseSettings for validation and type coercion.
 """
 
+from typing import Any
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 
 
 class Settings(BaseSettings):
@@ -64,9 +65,32 @@ class Settings(BaseSettings):
 
     # --- CORS ---
     cors_origins: list[str] = Field(
-        default=["http://localhost:5173", "http://localhost:3000"],
+        default=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+        ],
         description="Allowed CORS origins",
     )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [str(o).strip() for o in parsed if str(o).strip()]
+                except Exception:
+                    pass
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        elif isinstance(v, (list, tuple)):
+            return [str(origin).strip() for origin in v if str(origin).strip()]
+        return ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # --- Face Recognition & Vector DB ---
     face_match_threshold: float = Field(
@@ -140,6 +164,10 @@ class Settings(BaseSettings):
         default="",
         description="MongoDB Atlas connection URI string",
     )
+    mongodb_db_name: str = Field(
+        default="TRUE_FACE_AI",
+        description="MongoDB database name",
+    )
 
     # --- Email & OTP Verification ---
     smtp_host: str = Field(
@@ -167,9 +195,19 @@ class Settings(BaseSettings):
         gt=0,
         description="OTP expiration duration in minutes",
     )
+    otp_resend_cooldown_seconds: int = Field(
+        default=60,
+        ge=0,
+        description="Minimum seconds required between consecutive OTP send requests",
+    )
+    otp_max_attempts: int = Field(
+        default=5,
+        gt=0,
+        description="Maximum failed verification attempts allowed before OTP invalidation",
+    )
 
     model_config = {
-        "env_file": ".env",
+        "env_file": (".env", "backend/.env", "../backend/.env"),
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
         "extra": "ignore",

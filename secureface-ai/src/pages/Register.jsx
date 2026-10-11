@@ -10,6 +10,16 @@ function Register() {
   const [otpVerified, setOtpVerified] = useState(false)
   const [otpLoading, setOtpLoading] = useState(false)
   const [otpMessage, setOtpMessage] = useState('')
+  const [cooldown, setCooldown] = useState(0)
+
+  // Resend cooldown timer countdown
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const timer = setInterval(() => {
+      setCooldown((prev) => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [cooldown])
 
 
   const [inputMode, setInputMode] = useState('upload') // 'upload' | 'camera'
@@ -146,6 +156,7 @@ function Register() {
       setOtpSent(false)
       setOtpVerified(false)
       setOtpMessage('')
+      setCooldown(0)
       if (formErrors.otp) {
         setFormErrors((prev) => ({ ...prev, otp: null }))
       }
@@ -171,10 +182,16 @@ function Register() {
       const res = await sendOtp(emailClean)
       setOtpSent(true)
       setOtpVerified(false)
+      setCooldown(res.cooldown_seconds || 60)
       setOtpMessage(res.message || `OTP sent to ${emailClean}. Valid for 2 minutes.`)
     } catch (err) {
       console.error('Failed to send OTP:', err)
       setOtpMessage('')
+      // If error message indicates seconds remaining, update cooldown timer
+      const match = err.message?.match(/(\d+)\s*seconds/)
+      if (match) {
+        setCooldown(parseInt(match[1], 10))
+      }
       setFormErrors((prev) => ({
         ...prev,
         email: err.message || 'Failed to send OTP code. Please try again.',
@@ -410,13 +427,15 @@ function Register() {
                 type="button"
                 className="btn btn-primary"
                 style={{ width: '100%' }}
-                disabled={!formData.email.trim() || otpLoading || otpVerified}
+                disabled={!formData.email.trim() || otpLoading || otpVerified || cooldown > 0}
                 onClick={handleSendOtp}
               >
                 {otpLoading && !otpSent ? (
                   'Sending OTP...'
                 ) : otpVerified ? (
                   'Email Verified ✓'
+                ) : cooldown > 0 ? (
+                  `Resend OTP in ${cooldown}s`
                 ) : otpSent ? (
                   'Resend OTP to Email'
                 ) : (

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getDetailedHealth, getThresholds, updateThresholds, adminLogin } from '../services/api'
+import { getDetailedHealth, getThresholds, updateThresholds, adminLogin, API_BASE_URL } from '../services/api'
 
 function SystemStatus() {
   const [health, setHealth] = useState(null)
@@ -177,7 +177,7 @@ function SystemStatus() {
         badgeClass: 'badge-danger',
         dotColor: '#ef4444',
         icon: '⚫',
-        description: 'Unable to communicate with FastAPI server at http://127.0.0.1:8000',
+        description: `Unable to communicate with FastAPI server at ${API_BASE_URL}`,
       }
     }
 
@@ -497,7 +497,7 @@ function SystemStatus() {
                   FastAPI REST Server
                 </h3>
                 <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                  {comp.api?.details || 'Listening on 127.0.0.1:8000'}
+                  {comp.api?.details || `Connected to ${API_BASE_URL}`}
                 </p>
               </div>
               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '10px', fontSize: '11px', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>

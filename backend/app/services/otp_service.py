@@ -1,24 +1,36 @@
 """
 TRUE FACE AI — Email OTP Generation, Hashing & MongoDB Storage Service
 
-Provides secure generation, HMAC hashing, and MongoDB persistence/retrieval
-for numeric One-Time Passwords (OTPs).
+Provides cryptographically secure generation, HMAC-SHA256 hashing,
+resend cooldown enforcement, max attempt limits, and single-use verification
+backed by MongoDB persistence.
 """
 
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
+import logging
 import secrets
 from typing import Any
 
 from pymongo import MongoClient
 
 from app.config import settings
-from app.services.database import get_mongo_client
+from app.services.database import get_database, get_mongo_client
 
-# Collection configuration
+logger = logging.getLogger(__name__)
+
 OTP_COLLECTION_NAME = "otp_codes"
-DB_NAME = "TRUE_FACE_AI"
+
+
+class OTPCooldownError(Exception):
+    """Raised when an OTP request is made before the cooldown period has elapsed."""
+
+    def __init__(self, remaining_seconds: int):
+        self.remaining_seconds = remaining_seconds
+        super().__init__(
+            f"Please wait {remaining_seconds} seconds before requesting a new OTP."
+        )
 
 
 # --- Generation & Expiry ---
@@ -26,7 +38,6 @@ DB_NAME = "TRUE_FACE_AI"
 def generate_otp_code(digits: int = 6) -> str:
     """
     Securely generate a numeric OTP string of fixed length.
-
     Uses Python's cryptographically secure 'secrets' module.
     Preserves leading zeros (e.g. '012345').
     """
@@ -38,7 +49,6 @@ def generate_otp_code(digits: int = 6) -> str:
 def calculate_otp_expiration(expire_minutes: int | None = None) -> datetime:
     """
     Calculate timezone-aware UTC expiration datetime for an OTP.
-
     Defaults to settings.otp_expire_minutes if not specified.
     """
     minutes = (
@@ -64,7 +74,6 @@ def generate_otp_with_expiration() -> tuple[str, datetime]:
 def hash_otp(email: str, otp_code: str) -> str:
     """
     Cryptographically hash an OTP code using HMAC-SHA256 and settings.secret_key.
-
     Normalizes email address to lowercase and strips whitespace before hashing.
     """
     normalized_email = email.lower().strip()
@@ -76,14 +85,49 @@ def hash_otp(email: str, otp_code: str) -> str:
 def verify_otp_hash(email: str, otp_code: str, stored_hash: str) -> bool:
     """
     Securely compare an incoming OTP code against a stored OTP hash.
-
     Uses hmac.compare_digest to prevent timing attack side-channels.
     """
     computed_hash = hash_otp(email, otp_code)
     return hmac.compare_digest(computed_hash, stored_hash)
 
 
-# --- MongoDB Storage & Retrieval ---
+# --- Database Operations ---
+
+def check_resend_cooldown(
+    email: str,
+    client: MongoClient | None = None,
+) -> int:
+    """
+    Check if an email address is within the OTP resend cooldown window.
+
+    Returns:
+        int: Remaining cooldown seconds, or 0 if allowed to resend.
+    """
+    normalized_email = email.lower().strip()
+    db = client[settings.mongodb_db_name] if client else get_database()
+    collection = db[OTP_COLLECTION_NAME]
+
+    record = collection.find_one({"email": normalized_email})
+    if not record:
+        return 0
+
+    created_at = record.get("created_at")
+    if not created_at:
+        return 0
+
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    elapsed_seconds = (now - created_at).total_seconds()
+    cooldown = settings.otp_resend_cooldown_seconds
+
+    if elapsed_seconds < cooldown:
+        remaining = int(cooldown - elapsed_seconds)
+        return max(remaining, 1)
+
+    return 0
+
 
 def save_otp_record(
     email: str,
@@ -93,11 +137,21 @@ def save_otp_record(
 ) -> dict[str, Any]:
     """
     Store or replace the active OTP record for an email address in MongoDB.
+    Enforces resend cooldown, stores HMAC hash, and initializes attempt counter.
+    Never stores plain-text OTPs.
 
-    Saves the HMAC-SHA256 hashed OTP, created timestamp, and expiration timestamp.
-    Never stores the plain-text OTP.
+    Raises:
+        OTPCooldownError: If the request is made before the cooldown window elapses.
     """
     normalized_email = email.lower().strip()
+    db = client[settings.mongodb_db_name] if client else get_database()
+    collection = db[OTP_COLLECTION_NAME]
+
+    # Verify cooldown before overwriting
+    remaining = check_resend_cooldown(normalized_email, client=client)
+    if remaining > 0:
+        raise OTPCooldownError(remaining_seconds=remaining)
+
     hashed = hash_otp(normalized_email, otp_code)
     now = datetime.now(timezone.utc)
 
@@ -107,25 +161,32 @@ def save_otp_record(
         "created_at": now,
         "expires_at": expires_at,
         "is_used": False,
+        "attempts": 0,
+        "max_attempts": settings.otp_max_attempts,
     }
 
-    close_client = False
-    if client is None:
-        client = get_mongo_client()
-        close_client = True
+    collection.update_one(
+        {"email": normalized_email},
+        {"$set": record},
+        upsert=True,
+    )
+    return record
 
+
+def invalidate_otp_record(
+    email: str,
+    client: MongoClient | None = None,
+) -> None:
+    """
+    Invalidate or remove an OTP record (e.g. if email transmission failed).
+    """
+    normalized_email = email.lower().strip()
     try:
-        db = client[DB_NAME]
+        db = client[settings.mongodb_db_name] if client else get_database()
         collection = db[OTP_COLLECTION_NAME]
-        collection.update_one(
-            {"email": normalized_email},
-            {"$set": record},
-            upsert=True,
-        )
-        return record
-    finally:
-        if close_client:
-            client.close()
+        collection.delete_one({"email": normalized_email})
+    except Exception as e:
+        logger.warning("Failed to invalidate OTP record for %s: %s", normalized_email, e)
 
 
 def get_active_otp_record(
@@ -134,86 +195,113 @@ def get_active_otp_record(
 ) -> dict[str, Any] | None:
     """
     Retrieve the active, non-expired, unused OTP record for an email address.
-
-    Rejects expired records using application-level UTC datetime comparison.
     """
     normalized_email = email.lower().strip()
-    close_client = False
-    if client is None:
-        client = get_mongo_client()
-        close_client = True
+    db = client[settings.mongodb_db_name] if client else get_database()
+    collection = db[OTP_COLLECTION_NAME]
 
-    try:
-        db = client[DB_NAME]
-        collection = db[OTP_COLLECTION_NAME]
-        record = collection.find_one({"email": normalized_email, "is_used": False})
+    record = collection.find_one({"email": normalized_email, "is_used": False})
+    if not record:
+        return None
 
-        if not record:
+    # Application-level expiration validation
+    expires_at = record.get("expires_at")
+    if expires_at:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= expires_at:
             return None
 
-        # Application-level expiration validation
-        expires_at = record.get("expires_at")
-        if expires_at:
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) >= expires_at:
-                return None
-
-        return record
-    finally:
-        if close_client:
-            client.close()
+    return record
 
 
 def verify_stored_otp(
     email: str,
     otp_code: str,
     client: MongoClient | None = None,
-) -> bool:
+) -> tuple[bool, str]:
     """
     Verify an incoming OTP against the active stored record for an email address.
 
-    If valid and non-expired, marks the record as used (is_used=True).
-    Returns True if verification succeeded, False otherwise.
+    Enforces:
+    1. Active record existence
+    2. UTC expiration check
+    3. Maximum attempt limits with failed attempt counter
+    4. Timing-safe cryptographic hash comparison
+    5. Single-use invalidation (marks is_used=True to prevent replay)
+
+    Returns:
+        tuple[bool, str]: (is_valid, message)
     """
     normalized_email = email.lower().strip()
-    close_client = False
-    if client is None:
-        client = get_mongo_client()
-        close_client = True
+    db = client[settings.mongodb_db_name] if client else get_database()
+    collection = db[OTP_COLLECTION_NAME]
 
-    try:
-        db = client[DB_NAME]
-        collection = db[OTP_COLLECTION_NAME]
+    record = collection.find_one({"email": normalized_email, "is_used": False})
+    if not record:
+        return False, "No active OTP request found for this email address. Please request a new code."
 
-        record = collection.find_one({"email": normalized_email, "is_used": False})
-        if not record:
-            return False
+    # 1. Expiration check
+    expires_at = record.get("expires_at")
+    if expires_at:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= expires_at:
+            collection.update_one(
+                {"_id": record["_id"]},
+                {"$set": {"is_used": True, "reason": "expired"}},
+            )
+            return False, "Verification OTP has expired. Please request a new code."
 
-        # Expiration check
-        expires_at = record.get("expires_at")
-        if expires_at:
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) >= expires_at:
-                return False
-
-        # Secure hash comparison
-        stored_hash = record.get("otp_hash", "")
-        if not verify_otp_hash(normalized_email, otp_code, stored_hash):
-            return False
-
-        # Mark OTP as used to prevent replay attacks
+    # 2. Maximum attempts check
+    attempts = record.get("attempts", 0)
+    max_attempts = record.get("max_attempts", settings.otp_max_attempts)
+    if attempts >= max_attempts:
         collection.update_one(
             {"_id": record["_id"]},
-            {
-                "$set": {
-                    "is_used": True,
-                    "used_at": datetime.now(timezone.utc),
-                }
-            },
+            {"$set": {"is_used": True, "reason": "max_attempts_exceeded"}},
         )
-        return True
-    finally:
-        if close_client:
-            client.close()
+        return False, "Maximum verification attempts exceeded. Please request a new code."
+
+    # 3. Secure hash comparison
+    stored_hash = record.get("otp_hash", "")
+    if not verify_otp_hash(normalized_email, otp_code, stored_hash):
+        new_attempts = attempts + 1
+        remaining_attempts = max_attempts - new_attempts
+        if remaining_attempts <= 0:
+            collection.update_one(
+                {"_id": record["_id"]},
+                {
+                    "$set": {
+                        "attempts": new_attempts,
+                        "is_used": True,
+                        "reason": "max_attempts_exceeded",
+                    }
+                },
+            )
+            return (
+                False,
+                "Invalid OTP code. Maximum verification attempts reached. Please request a new code.",
+            )
+        else:
+            collection.update_one(
+                {"_id": record["_id"]},
+                {"$set": {"attempts": new_attempts}},
+            )
+            return (
+                False,
+                f"Invalid OTP code. {remaining_attempts} attempt(s) remaining.",
+            )
+
+    # 4. Success: Mark OTP as used to prevent replay attacks
+    collection.update_one(
+        {"_id": record["_id"]},
+        {
+            "$set": {
+                "is_used": True,
+                "used_at": datetime.now(timezone.utc),
+                "reason": "verified",
+            }
+        },
+    )
+    return True, "Email OTP verification successful."
