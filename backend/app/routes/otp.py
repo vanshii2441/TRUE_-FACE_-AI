@@ -104,17 +104,17 @@ async def send_otp(payload: OTPSendRequest) -> dict[str, Any]:
             detail="An unexpected database error occurred while processing the OTP request.",
         )
 
-    # 3. Dispatch OTP email via SMTP
+    # 3. Dispatch OTP email via SMTP (or fallback to local dev mode if unconfigured)
+    dev_mode = False
     try:
         send_otp_email(to_email=email, otp_code=otp_code)
-    except ValueError as e:
-        logger.error("SMTP configuration missing: %s", e)
-        # Roll back stored OTP so user is not locked by a failed send
-        invalidate_otp_record(email=email)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Email service is unconfigured on the server. Please configure SMTP credentials in backend/.env.",
-        )
+    except ValueError:
+        logger.info("[DEV MODE] SMTP not configured. OTP for %s is %s", email, otp_code)
+        print(f"\n==========================================", flush=True)
+        print(f" [DEV MODE] Email OTP for: {email}", flush=True)
+        print(f" >>> OTP CODE: {otp_code} <<<", flush=True)
+        print(f"==========================================\n", flush=True)
+        dev_mode = True
     except RuntimeError as e:
         logger.error("SMTP delivery failure: %s", e)
         invalidate_otp_record(email=email)
@@ -129,6 +129,16 @@ async def send_otp(payload: OTPSendRequest) -> dict[str, Any]:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while sending the OTP email.",
         )
+
+    if dev_mode:
+        return {
+            "success": True,
+            "message": f"[DEV MODE] Verification OTP: {otp_code} (Code logged to server)",
+            "email": email,
+            "dev_otp": otp_code,
+            "expires_in_minutes": settings.otp_expire_minutes,
+            "cooldown_seconds": settings.otp_resend_cooldown_seconds,
+        }
 
     return {
         "success": True,

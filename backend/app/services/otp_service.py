@@ -91,6 +91,10 @@ def verify_otp_hash(email: str, otp_code: str, stored_hash: str) -> bool:
     return hmac.compare_digest(computed_hash, stored_hash)
 
 
+# In-memory store for local development mode when MongoDB URI is not configured
+_dev_otp_store: dict[str, dict[str, Any]] = {}
+
+
 # --- Database Operations ---
 
 def check_resend_cooldown(
@@ -104,10 +108,13 @@ def check_resend_cooldown(
         int: Remaining cooldown seconds, or 0 if allowed to resend.
     """
     normalized_email = email.lower().strip()
-    db = client[settings.mongodb_db_name] if client else get_database()
-    collection = db[OTP_COLLECTION_NAME]
+    try:
+        db = client[settings.mongodb_db_name] if client else get_database()
+        collection = db[OTP_COLLECTION_NAME]
+        record = collection.find_one({"email": normalized_email})
+    except ValueError:
+        record = _dev_otp_store.get(normalized_email)
 
-    record = collection.find_one({"email": normalized_email})
     if not record:
         return 0
 
@@ -136,7 +143,8 @@ def save_otp_record(
     client: MongoClient | None = None,
 ) -> dict[str, Any]:
     """
-    Store or replace the active OTP record for an email address in MongoDB.
+    Store or replace the active OTP record for an email address in MongoDB
+    (or local memory in dev mode).
     Enforces resend cooldown, stores HMAC hash, and initializes attempt counter.
     Never stores plain-text OTPs.
 
@@ -144,8 +152,6 @@ def save_otp_record(
         OTPCooldownError: If the request is made before the cooldown window elapses.
     """
     normalized_email = email.lower().strip()
-    db = client[settings.mongodb_db_name] if client else get_database()
-    collection = db[OTP_COLLECTION_NAME]
 
     # Verify cooldown before overwriting
     remaining = check_resend_cooldown(normalized_email, client=client)
@@ -165,11 +171,18 @@ def save_otp_record(
         "max_attempts": settings.otp_max_attempts,
     }
 
-    collection.update_one(
-        {"email": normalized_email},
-        {"$set": record},
-        upsert=True,
-    )
+    try:
+        db = client[settings.mongodb_db_name] if client else get_database()
+        collection = db[OTP_COLLECTION_NAME]
+        collection.update_one(
+            {"email": normalized_email},
+            {"$set": record},
+            upsert=True,
+        )
+    except ValueError:
+        logger.info("[DEV MODE] Storing OTP record in-memory for %s", normalized_email)
+        _dev_otp_store[normalized_email] = record
+
     return record
 
 
@@ -181,12 +194,13 @@ def invalidate_otp_record(
     Invalidate or remove an OTP record (e.g. if email transmission failed).
     """
     normalized_email = email.lower().strip()
+    _dev_otp_store.pop(normalized_email, None)
     try:
         db = client[settings.mongodb_db_name] if client else get_database()
         collection = db[OTP_COLLECTION_NAME]
         collection.delete_one({"email": normalized_email})
     except Exception as e:
-        logger.warning("Failed to invalidate OTP record for %s: %s", normalized_email, e)
+        logger.debug("Failed to invalidate OTP record in database for %s: %s", normalized_email, e)
 
 
 def get_active_otp_record(
@@ -197,10 +211,15 @@ def get_active_otp_record(
     Retrieve the active, non-expired, unused OTP record for an email address.
     """
     normalized_email = email.lower().strip()
-    db = client[settings.mongodb_db_name] if client else get_database()
-    collection = db[OTP_COLLECTION_NAME]
+    try:
+        db = client[settings.mongodb_db_name] if client else get_database()
+        collection = db[OTP_COLLECTION_NAME]
+        record = collection.find_one({"email": normalized_email, "is_used": False})
+    except ValueError:
+        record = _dev_otp_store.get(normalized_email)
+        if record and record.get("is_used"):
+            record = None
 
-    record = collection.find_one({"email": normalized_email, "is_used": False})
     if not record:
         return None
 
@@ -234,10 +253,17 @@ def verify_stored_otp(
         tuple[bool, str]: (is_valid, message)
     """
     normalized_email = email.lower().strip()
-    db = client[settings.mongodb_db_name] if client else get_database()
-    collection = db[OTP_COLLECTION_NAME]
+    is_dev = False
+    try:
+        db = client[settings.mongodb_db_name] if client else get_database()
+        collection = db[OTP_COLLECTION_NAME]
+        record = collection.find_one({"email": normalized_email, "is_used": False})
+    except ValueError:
+        is_dev = True
+        record = _dev_otp_store.get(normalized_email)
+        if record and record.get("is_used"):
+            record = None
 
-    record = collection.find_one({"email": normalized_email, "is_used": False})
     if not record:
         return False, "No active OTP request found for this email address. Please request a new code."
 
@@ -247,20 +273,28 @@ def verify_stored_otp(
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
         if datetime.now(timezone.utc) >= expires_at:
-            collection.update_one(
-                {"_id": record["_id"]},
-                {"$set": {"is_used": True, "reason": "expired"}},
-            )
+            if is_dev:
+                record["is_used"] = True
+                record["reason"] = "expired"
+            else:
+                collection.update_one(
+                    {"_id": record["_id"]},
+                    {"$set": {"is_used": True, "reason": "expired"}},
+                )
             return False, "Verification OTP has expired. Please request a new code."
 
     # 2. Maximum attempts check
     attempts = record.get("attempts", 0)
     max_attempts = record.get("max_attempts", settings.otp_max_attempts)
     if attempts >= max_attempts:
-        collection.update_one(
-            {"_id": record["_id"]},
-            {"$set": {"is_used": True, "reason": "max_attempts_exceeded"}},
-        )
+        if is_dev:
+            record["is_used"] = True
+            record["reason"] = "max_attempts_exceeded"
+        else:
+            collection.update_one(
+                {"_id": record["_id"]},
+                {"$set": {"is_used": True, "reason": "max_attempts_exceeded"}},
+            )
         return False, "Maximum verification attempts exceeded. Please request a new code."
 
     # 3. Secure hash comparison
@@ -269,39 +303,53 @@ def verify_stored_otp(
         new_attempts = attempts + 1
         remaining_attempts = max_attempts - new_attempts
         if remaining_attempts <= 0:
-            collection.update_one(
-                {"_id": record["_id"]},
-                {
-                    "$set": {
-                        "attempts": new_attempts,
-                        "is_used": True,
-                        "reason": "max_attempts_exceeded",
-                    }
-                },
-            )
+            if is_dev:
+                record["attempts"] = new_attempts
+                record["is_used"] = True
+                record["reason"] = "max_attempts_exceeded"
+            else:
+                collection.update_one(
+                    {"_id": record["_id"]},
+                    {
+                        "$set": {
+                            "attempts": new_attempts,
+                            "is_used": True,
+                            "reason": "max_attempts_exceeded",
+                        }
+                    },
+                )
             return (
                 False,
                 "Invalid OTP code. Maximum verification attempts reached. Please request a new code.",
             )
         else:
-            collection.update_one(
-                {"_id": record["_id"]},
-                {"$set": {"attempts": new_attempts}},
-            )
+            if is_dev:
+                record["attempts"] = new_attempts
+            else:
+                collection.update_one(
+                    {"_id": record["_id"]},
+                    {"$set": {"attempts": new_attempts}},
+                )
             return (
                 False,
                 f"Invalid OTP code. {remaining_attempts} attempt(s) remaining.",
             )
 
     # 4. Success: Mark OTP as used to prevent replay attacks
-    collection.update_one(
-        {"_id": record["_id"]},
-        {
-            "$set": {
-                "is_used": True,
-                "used_at": datetime.now(timezone.utc),
-                "reason": "verified",
-            }
-        },
-    )
+    if is_dev:
+        record["is_used"] = True
+        record["used_at"] = datetime.now(timezone.utc)
+        record["reason"] = "verified"
+    else:
+        collection.update_one(
+            {"_id": record["_id"]},
+            {
+                "$set": {
+                    "is_used": True,
+                    "used_at": datetime.now(timezone.utc),
+                    "reason": "verified",
+                }
+            },
+        )
     return True, "Email OTP verification successful."
+
