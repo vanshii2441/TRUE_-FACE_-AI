@@ -18,7 +18,12 @@ from pymongo.errors import (
 )
 
 from app.config import settings
-from app.schemas.otp import OTPSendRequest, OTPVerifyRequest
+from app.schemas.otp import (
+    OTPSendRequest,
+    OTPSendResponse,
+    OTPVerifyRequest,
+    OTPVerifyResponse,
+)
 from app.services.database import mask_credentials
 from app.services.email_service import send_otp_email
 from app.services.otp_service import (
@@ -36,8 +41,9 @@ router = APIRouter(prefix="/api/v1/otp", tags=["Email OTP"])
 
 @router.post(
     "/send",
+    response_model=OTPSendResponse,
     summary="Send Email OTP",
-    description="Generates a 6-digit OTP, stores its hash in MongoDB, and dispatches it via SMTP email.",
+    description="Generates a secure 6-digit OTP, stores its hash in MongoDB, and dispatches it via SMTP email.",
 )
 async def send_otp(payload: OTPSendRequest) -> dict[str, Any]:
     """
@@ -104,17 +110,17 @@ async def send_otp(payload: OTPSendRequest) -> dict[str, Any]:
             detail="An unexpected database error occurred while processing the OTP request.",
         )
 
-    # 3. Dispatch OTP email via SMTP (or fallback to local dev mode if unconfigured)
-    dev_mode = False
+    # 3. Dispatch OTP email via configured SMTP
     try:
         send_otp_email(to_email=email, otp_code=otp_code)
-    except ValueError:
-        logger.info("[DEV MODE] SMTP not configured. OTP for %s is %s", email, otp_code)
-        print(f"\n==========================================", flush=True)
-        print(f" [DEV MODE] Email OTP for: {email}", flush=True)
-        print(f" >>> OTP CODE: {otp_code} <<<", flush=True)
-        print(f"==========================================\n", flush=True)
-        dev_mode = True
+    except ValueError as ve:
+        logger.error("SMTP configuration error: %s", ve)
+        # Roll back stored OTP so user is not locked by a failed send
+        invalidate_otp_record(email=email)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email service is unconfigured on the server. Please configure SMTP credentials in backend/.env.",
+        )
     except RuntimeError as e:
         logger.error("SMTP delivery failure: %s", e)
         invalidate_otp_record(email=email)
@@ -130,16 +136,6 @@ async def send_otp(payload: OTPSendRequest) -> dict[str, Any]:
             detail="An unexpected error occurred while sending the OTP email.",
         )
 
-    if dev_mode:
-        return {
-            "success": True,
-            "message": f"[DEV MODE] Verification OTP: {otp_code} (Code logged to server)",
-            "email": email,
-            "dev_otp": otp_code,
-            "expires_in_minutes": settings.otp_expire_minutes,
-            "cooldown_seconds": settings.otp_resend_cooldown_seconds,
-        }
-
     return {
         "success": True,
         "message": f"Verification OTP code successfully sent to {email}.",
@@ -151,6 +147,7 @@ async def send_otp(payload: OTPSendRequest) -> dict[str, Any]:
 
 @router.post(
     "/verify",
+    response_model=OTPVerifyResponse,
     summary="Verify Email OTP",
     description="Verifies an incoming 6-digit OTP against active stored records in MongoDB.",
 )

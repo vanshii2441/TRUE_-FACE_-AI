@@ -14,6 +14,7 @@ Covers:
 
 from datetime import datetime, timedelta, timezone
 import re
+import smtplib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,6 +24,7 @@ from pymongo.errors import OperationFailure, ServerSelectionTimeoutError
 from app.config import settings
 from app.main import app
 from app.services.database import mask_credentials, sanitize_mongo_uri
+from app.services.email_service import send_otp_email
 from app.services.otp_service import (
     OTPCooldownError,
     calculate_otp_expiration,
@@ -300,7 +302,7 @@ def test_invalidate_otp_record():
 @patch("app.routes.otp.send_otp_email")
 @patch("app.routes.otp.save_otp_record")
 def test_api_send_otp_success(mock_save, mock_send_email):
-    """Verify POST /api/v1/otp/send returns HTTP 200 and dispatches email."""
+    """Verify POST /api/v1/otp/send returns HTTP 200, dispatches email, and NEVER exposes OTP."""
     mock_save.return_value = {"email": "api_user@example.com"}
     mock_send_email.return_value = True
 
@@ -311,7 +313,11 @@ def test_api_send_otp_success(mock_save, mock_send_email):
     assert data["success"] is True
     assert data["email"] == "api_user@example.com"
     assert "message" in data
+    assert "dev_otp" not in data  # CRITICAL: dev_otp must never be present
+    assert "otp" not in data
+    assert "[DEV MODE]" not in data["message"]
     assert data["expires_in_minutes"] == settings.otp_expire_minutes
+    assert data["cooldown_seconds"] == settings.otp_resend_cooldown_seconds
     mock_send_email.assert_called_once()
 
 
@@ -356,15 +362,35 @@ def test_api_send_otp_database_timeout_503(mock_save):
 @patch("app.routes.otp.send_otp_email")
 @patch("app.routes.otp.save_otp_record")
 def test_api_send_otp_email_failure_rolls_back(mock_save, mock_send_email, mock_invalidate):
-    """Verify POST /api/v1/otp/send rolls back OTP record if SMTP fails."""
+    """Verify POST /api/v1/otp/send rolls back OTP record and returns 502 if SMTP fails."""
     mock_save.return_value = {"email": "smtp_fail@example.com"}
     mock_send_email.side_effect = RuntimeError("SMTP connection failed")
 
     response = client.post("/api/v1/otp/send", json={"email": "smtp_fail@example.com"})
 
     assert response.status_code == 502
+    assert "Failed to deliver OTP email" in response.json()["detail"]
+    assert "dev_otp" not in response.json()
     # Verify rollback was called
     mock_invalidate.assert_called_once_with(email="smtp_fail@example.com")
+
+
+@patch("app.routes.otp.invalidate_otp_record")
+@patch("app.routes.otp.send_otp_email")
+@patch("app.routes.otp.save_otp_record")
+def test_api_send_otp_unconfigured_smtp_returns_503_and_rolls_back(
+    mock_save, mock_send_email, mock_invalidate
+):
+    """Verify unconfigured SMTP raises 503, invalidates record, and does NOT fallback to dev mode."""
+    mock_save.return_value = {"email": "nosmtp@example.com"}
+    mock_send_email.side_effect = ValueError("SMTP credentials not configured")
+
+    response = client.post("/api/v1/otp/send", json={"email": "nosmtp@example.com"})
+
+    assert response.status_code == 503
+    assert "Email service is unconfigured" in response.json()["detail"]
+    assert "dev_otp" not in response.json()
+    mock_invalidate.assert_called_once_with(email="nosmtp@example.com")
 
 
 @patch("app.routes.otp.verify_stored_otp")
@@ -381,6 +407,7 @@ def test_api_verify_otp_success_200(mock_verify):
     data = response.json()
     assert data["success"] is True
     assert data["email"] == "verify_ok@example.com"
+    assert "successful" in data["message"].lower()
 
 
 @patch("app.routes.otp.verify_stored_otp")
@@ -399,6 +426,57 @@ def test_api_verify_otp_invalid_code_400(mock_verify):
 
 
 @patch("app.routes.otp.verify_stored_otp")
+def test_api_verify_otp_expired_code_400(mock_verify):
+    """Verify POST /api/v1/otp/verify returns HTTP 400 when OTP has expired."""
+    mock_verify.return_value = (False, "Verification OTP has expired. Please request a new code.")
+
+    response = client.post(
+        "/api/v1/otp/verify",
+        json={"email": "verify_expired@example.com", "otp": "123456"},
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert "expired" in data["detail"].lower()
+
+
+@patch("app.routes.otp.verify_stored_otp")
+def test_api_verify_otp_already_used_code_400(mock_verify):
+    """Verify POST /api/v1/otp/verify returns HTTP 400 when OTP was already used (single-use)."""
+    mock_verify.return_value = (
+        False,
+        "No active OTP request found for this email address. Please request a new code.",
+    )
+
+    response = client.post(
+        "/api/v1/otp/verify",
+        json={"email": "verify_used@example.com", "otp": "123456"},
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert "no active otp request" in data["detail"].lower()
+
+
+@patch("app.routes.otp.verify_stored_otp")
+def test_api_verify_otp_max_attempts_exceeded_400(mock_verify):
+    """Verify POST /api/v1/otp/verify returns HTTP 400 when maximum attempts are exceeded."""
+    mock_verify.return_value = (
+        False,
+        "Maximum verification attempts exceeded. Please request a new code.",
+    )
+
+    response = client.post(
+        "/api/v1/otp/verify",
+        json={"email": "verify_locked@example.com", "otp": "123456"},
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    assert "maximum" in data["detail"].lower()
+
+
+@patch("app.routes.otp.verify_stored_otp")
 def test_api_verify_otp_database_error_503(mock_verify):
     """Verify POST /api/v1/otp/verify handles DB outages gracefully."""
     mock_verify.side_effect = ServerSelectionTimeoutError("Server unreachable")
@@ -410,6 +488,59 @@ def test_api_verify_otp_database_error_503(mock_verify):
 
     assert response.status_code == 503
     assert "timed out" in response.json()["detail"].lower()
+
+
+# ==============================================================================
+# 3b. SMTP Email Service Unit Tests
+# ==============================================================================
+
+@patch("app.services.email_service.smtplib.SMTP")
+def test_send_otp_email_service_success(mock_smtp_cls):
+    """Verify send_otp_email constructs valid message and executes STARTTLS & login."""
+    mock_server = MagicMock()
+    mock_smtp_cls.return_value.__enter__.return_value = mock_server
+
+    with patch.object(settings, "smtp_user", "testsender@example.com"), \
+         patch.object(settings, "smtp_password", "testapppass1234"), \
+         patch.object(settings, "emails_from_email", "testsender@example.com"):
+        result = send_otp_email("recipient@example.com", "842619")
+
+    assert result is True
+    mock_server.starttls.assert_called_once()
+    mock_server.login.assert_called_once_with("testsender@example.com", "testapppass1234")
+    mock_server.sendmail.assert_called_once()
+    args = mock_server.sendmail.call_args[0]
+    assert args[0] == "testsender@example.com"
+    assert args[1] == ["recipient@example.com"]
+    raw_message = args[2]
+    assert "842619" in raw_message
+
+
+def test_send_otp_email_service_unconfigured_raises_value_error():
+    """Verify send_otp_email raises ValueError if credentials are not configured."""
+    with patch.object(settings, "smtp_user", ""), \
+         patch.object(settings, "smtp_password", ""), \
+         patch.object(settings, "emails_from_email", ""):
+        with pytest.raises(ValueError) as exc:
+            send_otp_email("user@example.com", "123456")
+        assert "SMTP credentials not configured" in str(exc.value)
+
+
+@patch("app.services.email_service.smtplib.SMTP")
+def test_send_otp_email_service_auth_failure_raises_runtime_error(mock_smtp_cls):
+    """Verify SMTPAuthenticationError is sanitized and raises RuntimeError."""
+    mock_server = MagicMock()
+    mock_server.login.side_effect = smtplib.SMTPAuthenticationError(535, b"Authentication failed")
+    mock_smtp_cls.return_value.__enter__.return_value = mock_server
+
+    with patch.object(settings, "smtp_user", "sender@example.com"), \
+         patch.object(settings, "smtp_password", "secretpassword"), \
+         patch.object(settings, "emails_from_email", "sender@example.com"):
+        with pytest.raises(RuntimeError) as exc:
+            send_otp_email("user@example.com", "123456")
+        assert "authentication failed" in str(exc.value).lower()
+        assert "secretpassword" not in str(exc.value)
+
 
 
 # ==============================================================================

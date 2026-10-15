@@ -33,3 +33,22 @@ class OTPVerifyRequest(BaseModel):
         description="6-digit numeric One-Time Password (OTP)",
         examples=["123456"],
     )
+
+
+class OTPSendResponse(BaseModel):
+    """Response schema for successful Email OTP dispatch."""
+
+    success: bool = Field(default=True, description="Status of OTP delivery")
+    message: str = Field(..., description="Confirmation message")
+    email: EmailStr = Field(..., description="Recipient email address")
+    expires_in_minutes: int = Field(..., description="OTP expiration duration in minutes")
+    cooldown_seconds: int = Field(..., description="Seconds to wait before next resend")
+
+
+class OTPVerifyResponse(BaseModel):
+    """Response schema for successful Email OTP verification."""
+
+    success: bool = Field(default=True, description="Verification status")
+    message: str = Field(..., description="Result message")
+    email: EmailStr = Field(..., description="Verified email address")
+

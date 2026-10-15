@@ -183,9 +183,6 @@ function Register() {
       setOtpSent(true)
       setOtpVerified(false)
       setCooldown(res.cooldown_seconds || 60)
-      if (res.dev_otp) {
-        setOtp(res.dev_otp)
-      }
       setOtpMessage(res.message || `OTP sent to ${emailClean}. Valid for 2 minutes.`)
     } catch (err) {
       console.error('Failed to send OTP:', err)
