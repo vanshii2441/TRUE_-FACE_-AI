@@ -340,8 +340,12 @@ function SystemStatus() {
                 </button>
               </div>
             ) : (
-              <button className="btn btn-primary btn-sm" onClick={() => setShowLoginModal(true)}>
-                🔑 Admin Login
+              <button className="btn btn-primary btn-sm" onClick={() => setShowLoginModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14 }}>
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <span>Admin Login</span>
               </button>
             )}
           </div>
@@ -388,7 +392,10 @@ function SystemStatus() {
               disabled={isRefreshing || loading}
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <span className={isRefreshing ? 'spin' : ''}>🔄</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`btn-icon ${isRefreshing ? 'spin' : ''}`}>
+                <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+                <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+              </svg>
               <span>{isRefreshing ? 'Refreshing...' : 'Refresh Status'}</span>
             </button>
           </div>
@@ -412,7 +419,10 @@ function SystemStatus() {
             gap: '8px',
           }}
         >
-          <span className="spin">⏳</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="btn-icon spin">
+            <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+            <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+          </svg>
           <span>{refreshStep}</span>
         </div>
       )}
@@ -432,8 +442,13 @@ function SystemStatus() {
             justify: 'space-between',
           }}
         >
-          <div>
-            <strong>⚠️ System Connection Alert:</strong> {error}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 18, height: 18, flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span><strong>System Connection Alert:</strong> {error}</span>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={() => fetchData(true)}>
             Retry Connection
@@ -461,7 +476,10 @@ function SystemStatus() {
 
         {loading && !health ? (
           <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <div className="spin" style={{ fontSize: '24px', marginBottom: '12px' }}>🔄</div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="btn-icon spin" style={{ width: 28, height: 28, margin: '0 auto 12px auto', display: 'block' }}>
+              <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+            </svg>
             Fetching real-time backend component diagnostics...
           </div>
         ) : health ? (
@@ -628,8 +646,13 @@ function SystemStatus() {
                 </p>
 
                 {comp.liveness?.reason && (
-                  <div style={{ padding: '8px 10px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', fontSize: '11px', color: '#f59e0b', marginBottom: '10px' }}>
-                    💡 {comp.liveness.reason}
+                  <div style={{ padding: '8px 10px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', fontSize: '11px', color: '#f59e0b', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, flexShrink: 0 }}>
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span>{comp.liveness.reason}</span>
                   </div>
                 )}
               </div>
@@ -683,8 +706,13 @@ function SystemStatus() {
                 </p>
 
                 {comp.deepfake?.reason && (
-                  <div style={{ padding: '8px 10px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', fontSize: '11px', color: '#f59e0b', marginBottom: '10px' }}>
-                    💡 {comp.deepfake.reason}
+                  <div style={{ padding: '8px 10px', borderRadius: '6px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', fontSize: '11px', color: '#f59e0b', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, flexShrink: 0 }}>
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span>{comp.deepfake.reason}</span>
                   </div>
                 )}
               </div>
@@ -826,8 +854,14 @@ function SystemStatus() {
               className="btn btn-primary btn-sm"
               onClick={handleSaveThresholds}
               disabled={savingThresholds}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              {savingThresholds ? 'Saving...' : '💾 Update Thresholds'}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14 }}>
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              <span>{savingThresholds ? 'Saving...' : 'Update Thresholds'}</span>
             </button>
           </div>
 
@@ -1078,14 +1112,25 @@ function SystemStatus() {
       {showLoginModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
           <div className="card animate-in" style={{ maxWidth: '400px', width: '100%', padding: '28px' }}>
-            <h2 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, marginBottom: '6px' }}>🔑 Admin Authentication</h2>
+            <h2 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 20, height: 20 }}>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <span>Admin Authentication</span>
+            </h2>
             <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: '18px' }}>
               Authenticate with administrator credentials to modify system security settings.
             </p>
 
             {loginError && (
-              <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: 'var(--font-xs)', marginBottom: '14px' }}>
-                ⚠️ {loginError}
+              <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: 'var(--font-xs)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, flexShrink: 0 }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>{loginError}</span>
               </div>
             )}
 
