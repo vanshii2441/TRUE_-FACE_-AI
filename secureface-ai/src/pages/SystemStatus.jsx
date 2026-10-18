@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { getDetailedHealth, getThresholds, updateThresholds, adminLogin, API_BASE_URL } from '../services/api'
 import Breadcrumb from '../components/Breadcrumb'
 
@@ -27,6 +28,7 @@ function SystemStatus() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [loginForm, setLoginForm] = useState({ username: 'admin', password: '' })
   const [loginError, setLoginError] = useState(null)
+  const [loginLoading, setLoginLoading] = useState(false)
 
   // Threshold edit state
   const [savingThresholds, setSavingThresholds] = useState(false)
@@ -112,19 +114,49 @@ function SystemStatus() {
     }
   }, [autoRefresh, refreshIntervalSec, fetchData])
 
+  // Escape key handler and body scroll lock for modals
+  useEffect(() => {
+    if (!showLoginModal && !selectedModelDetails) return
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (showLoginModal) {
+          setShowLoginModal(false)
+          setLoginError(null)
+        }
+        if (selectedModelDetails) {
+          setSelectedModelDetails(null)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [showLoginModal, selectedModelDetails])
+
   // Handle Admin Login
   const handleAdminLogin = async (e) => {
     e.preventDefault()
     setLoginError(null)
+    setLoginLoading(true)
     try {
-      const res = await adminLogin(loginForm.username, loginForm.password)
+      const res = await adminLogin(loginForm.username.trim(), loginForm.password)
       setAdminToken(res.access_token)
       setAdminUser(res.username)
       localStorage.setItem('trueface_admin_token', res.access_token)
       localStorage.setItem('trueface_admin_user', res.username)
       setShowLoginModal(false)
+      setLoginForm({ username: res.username || 'admin', password: '' })
     } catch (err) {
       setLoginError(err.message || 'Invalid administrator password.')
+    } finally {
+      setLoginLoading(false)
     }
   }
 
@@ -1065,112 +1097,238 @@ function SystemStatus() {
         </div>
       )}
 
-      {/* Model Unavailable Details Modal */}
-      {selectedModelDetails && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div className="card animate-in" style={{ maxWidth: '520px', width: '100%', padding: '28px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '20px' }}>⚠️</span>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-                  {selectedModelDetails.name}
-                </h2>
+      {/* Model Diagnostics Modal */}
+      {selectedModelDetails &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setSelectedModelDetails(null)
+              }
+            }}
+            role="dialog"
+            aria-modal="true"
+            id="model-diagnostic-modal-overlay"
+          >
+            <div className="modal-card animate-in" id="model-diagnostic-modal-card">
+              <div className="modal-header">
+                <div className="modal-title-group">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="card-icon warning" style={{ width: 32, height: 32, minWidth: 32 }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 18, height: 18 }}>
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    </div>
+                    <h2 className="modal-title">{selectedModelDetails.name}</h2>
+                  </div>
+                  <span className="status-badge badge-neutral mt-8">{selectedModelDetails.status}</span>
+                </div>
+                <button
+                  type="button"
+                  className="modal-close-btn"
+                  onClick={() => setSelectedModelDetails(null)}
+                  aria-label="Close modal"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 18, height: 18 }}>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
               </div>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => setSelectedModelDetails(null)}
-                style={{ padding: '4px 10px' }}
+
+              <div
+                style={{
+                  padding: '14px',
+                  borderRadius: '10px',
+                  background: 'rgba(245,158,11,0.08)',
+                  border: '1px solid rgba(245,158,11,0.25)',
+                  marginBottom: '16px',
+                }}
               >
-                ✕
-              </button>
-            </div>
+                <strong style={{ color: '#ea580c', display: 'block', marginBottom: '4px', fontSize: '12px' }}>
+                  Backend Status Reason:
+                </strong>
+                <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-primary)', margin: 0, lineHeight: 1.5 }}>
+                  {selectedModelDetails.reason}
+                </p>
+              </div>
 
-            <div style={{ padding: '14px', borderRadius: '10px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', marginBottom: '16px' }}>
-              <strong style={{ color: '#f59e0b', display: 'block', marginBottom: '4px' }}>Backend Status Reason:</strong>
-              <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-primary)', margin: 0 }}>
-                {selectedModelDetails.reason}
-              </p>
-            </div>
+              <div style={{ marginBottom: '20px' }}>
+                <strong style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                  Recommended Resolution:
+                </strong>
+                <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-primary)', lineHeight: 1.5, margin: 0 }}>
+                  {selectedModelDetails.recommendation}
+                </p>
+              </div>
 
-            <div style={{ marginBottom: '20px' }}>
-              <strong style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Recommended Resolution:</strong>
-              <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-primary)', lineHeight: 1.5, margin: 0 }}>
-                {selectedModelDetails.recommendation}
-              </p>
+              <div className="modal-footer">
+                <button className="btn btn-primary btn-sm" onClick={() => setSelectedModelDetails(null)}>
+                  Close Diagnostics
+                </button>
+              </div>
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-primary btn-sm" onClick={() => setSelectedModelDetails(null)}>
-                Close Diagnostics
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* Admin Login Modal */}
-      {showLoginModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div className="card animate-in" style={{ maxWidth: '400px', width: '100%', padding: '28px' }}>
-            <h2 style={{ fontSize: 'var(--font-lg)', fontWeight: 700, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 20, height: 20 }}>
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              <span>Admin Authentication</span>
-            </h2>
-            <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: '18px' }}>
-              Authenticate with administrator credentials to modify system security settings.
-            </p>
-
-            {loginError && (
-              <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: 'var(--font-xs)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, flexShrink: 0 }}>
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-                <span>{loginError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleAdminLogin}>
-              <div className="form-group mb-16">
-                <label style={{ fontSize: 'var(--font-xs)', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Username</label>
-                <input
-                  type="text"
-                  className="input"
-                  value={loginForm.username}
-                  onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="form-group mb-20">
-                <label style={{ fontSize: 'var(--font-xs)', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Password</label>
-                <input
-                  type="password"
-                  className="input"
-                  placeholder="Enter admin password (default: admin123)"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                  required
-                  id="admin-password-input"
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowLoginModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary btn-sm">
-                  Login & Verify
+      {showLoginModal &&
+        createPortal(
+          <div
+            className="modal-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowLoginModal(false)
+                setLoginError(null)
+              }
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-login-title"
+            id="admin-login-modal-overlay"
+          >
+            <div className="modal-card modal-card-sm animate-in" id="admin-login-modal-card">
+              <div className="modal-header">
+                <div className="modal-title-group">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="card-icon primary" style={{ width: 32, height: 32, minWidth: 32 }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 18, height: 18 }}>
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </div>
+                    <h2 className="modal-title" id="admin-login-title">Admin Authentication</h2>
+                  </div>
+                  <p className="modal-subtitle">
+                    Authenticate with administrator credentials to modify security cutoffs and vector thresholds.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="modal-close-btn"
+                  onClick={() => {
+                    setShowLoginModal(false)
+                    setLoginError(null)
+                  }}
+                  aria-label="Close modal"
+                  id="admin-modal-close-btn"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 18, height: 18 }}>
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+
+              {loginError && (
+                <div className="alert-banner alert-danger mb-16 animate-in" role="alert">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="alert-icon">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleAdminLogin} noValidate>
+                <div className="form-group mb-16">
+                  <label htmlFor="admin-username-input" className="form-label">
+                    Administrator Username <span className="required-mark">*</span>
+                  </label>
+                  <div className="input-with-icon-group">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="input-leading-icon">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    <input
+                      id="admin-username-input"
+                      type="text"
+                      className="input"
+                      value={loginForm.username}
+                      onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                      placeholder="e.g. admin"
+                      required
+                      disabled={loginLoading}
+                      autoComplete="username"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group mb-20">
+                  <label htmlFor="admin-password-input" className="form-label">
+                    Administrator Password <span className="required-mark">*</span>
+                  </label>
+                  <div className="input-with-icon-group">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="input-leading-icon">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    <input
+                      id="admin-password-input"
+                      type="password"
+                      className="input"
+                      placeholder="Enter administrator password"
+                      value={loginForm.password}
+                      onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                      required
+                      disabled={loginLoading}
+                      autoComplete="current-password"
+                    />
+                  </div>
+                  <span className="field-hint-text">
+                    Protected administrator session token issued via Bearer auth.
+                  </span>
+                </div>
+
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      setShowLoginModal(false)
+                      setLoginError(null)
+                    }}
+                    disabled={loginLoading}
+                    id="admin-cancel-btn"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={loginLoading || !loginForm.username || !loginForm.password}
+                    id="admin-submit-btn"
+                  >
+                    {loginLoading ? (
+                      <>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="btn-icon spin">
+                          <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+                          <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+                        </svg>
+                        <span>Authenticating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="btn-icon">
+                          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                          <polyline points="10 17 15 12 10 7" />
+                          <line x1="15" y1="12" x2="3" y2="12" />
+                        </svg>
+                        <span>Login & Verify</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   )
 }
