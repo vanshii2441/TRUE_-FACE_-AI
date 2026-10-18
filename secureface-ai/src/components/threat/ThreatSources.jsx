@@ -1,4 +1,6 @@
 function ThreatSources({ sources }) {
+  const items = sources || []
+
   return (
     <div className="card threat-sources-card" id="threat-sources">
       <h3 className="threat-section-title">
@@ -11,24 +13,24 @@ function ThreatSources({ sources }) {
       </h3>
 
       <div className="threat-source-list">
-        {sources.length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
-            No perimeter terminal activity recorded.
+        {items.length === 0 ? (
+          <div style={{ padding: '28px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+            No threat source activity recorded. All perimeter verification requests are normal.
           </div>
         ) : (
-          sources.map((source, i) => {
-            const percentage = (source.count / source.max) * 100
+          items.map((source, i) => {
+            const percentage = source.max > 0 ? (source.count / source.max) * 100 : 0
             return (
-              <div className="threat-source-item" key={source.name} id={`source-${i}`}>
+              <div className="threat-source-item" key={source.name || i} id={`source-${i}`}>
                 <div className="threat-source-top">
-                  <span className="threat-source-name">{source.name}</span>
-                  <span className="threat-source-count">{source.count} Events</span>
+                  <span className="threat-source-name">{source.name || 'N/A'}</span>
+                  <span className="threat-source-count">{source.count} {source.count === 1 ? 'Incident' : 'Incidents'}</span>
                 </div>
                 <div className="threat-source-track">
                   <div
                     className="threat-source-fill"
                     style={{
-                      width: `${percentage}%`,
+                      width: `${Math.min(100, Math.max(0, percentage))}%`,
                       animationDelay: `${i * 0.1}s`,
                     }}
                   />

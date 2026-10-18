@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # --- Security & Admin Auth ---
     admin_username: str = Field(default="admin", description="Admin username")
-    admin_password: str = Field(default="admin123", description="Admin password")
+    admin_password: str = Field(default="VVM", description="Admin password")
     secret_key: str = Field(default="trueface_secret_key_2026_secure_token", description="JWT/Session secret key")
 
 

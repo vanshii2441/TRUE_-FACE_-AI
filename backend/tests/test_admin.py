@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.config import settings
 
 client = TestClient(app)
 
@@ -13,7 +14,7 @@ client = TestClient(app)
 def test_admin_login_success():
     res = client.post(
         "/api/v1/admin/login",
-        json={"username": "admin", "password": "admin123"},
+        json={"username": settings.admin_username, "password": settings.admin_password},
     )
     assert res.status_code == 200
     data = res.json()
@@ -53,7 +54,7 @@ def test_threshold_config_get_and_put():
     # Login as admin to get token
     login_res = client.post(
         "/api/v1/admin/login",
-        json={"username": "admin", "password": "admin123"},
+        json={"username": settings.admin_username, "password": settings.admin_password},
     )
     token = login_res.json()["access_token"]
 

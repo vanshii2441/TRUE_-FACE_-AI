@@ -32,25 +32,40 @@ function ThreatDistribution({ data }) {
 
       <div className="threat-donut-wrapper">
         <svg className="threat-donut" viewBox="0 0 200 200">
-          {segments.map((seg, i) => (
+          {total === 0 ? (
             <circle
-              key={seg.label}
-              className="threat-donut-segment"
               cx="100"
               cy="100"
               r={radius}
               fill="none"
-              stroke={seg.color}
-              strokeWidth="24"
-              strokeDasharray={`${seg.segmentLength} ${circumference - seg.segmentLength}`}
-              strokeDashoffset={-seg.offset}
-              strokeLinecap="round"
-              style={{ animationDelay: `${i * 0.15}s` }}
+              stroke="var(--border-color)"
+              strokeWidth="16"
+              strokeDasharray="6 6"
+              opacity="0.6"
             />
-          ))}
+          ) : (
+            segments.map((seg, i) => (
+              <circle
+                key={seg.label}
+                className="threat-donut-segment"
+                cx="100"
+                cy="100"
+                r={radius}
+                fill="none"
+                stroke={seg.color}
+                strokeWidth="24"
+                strokeDasharray={`${seg.segmentLength} ${circumference - seg.segmentLength}`}
+                strokeDashoffset={-seg.offset}
+                strokeLinecap="round"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))
+          )}
           {/* Center text */}
           <text x="100" y="92" textAnchor="middle" className="threat-donut-total">{total}</text>
-          <text x="100" y="114" textAnchor="middle" className="threat-donut-label">Total</text>
+          <text x="100" y="114" textAnchor="middle" className="threat-donut-label">
+            {total === 0 ? 'No Threats' : 'Total'}
+          </text>
         </svg>
       </div>
 
@@ -60,7 +75,7 @@ function ThreatDistribution({ data }) {
             <span className="threat-legend-dot" style={{ background: seg.color }} />
             <span className="threat-legend-text">{seg.label}</span>
             <span className="threat-legend-count">{seg.count}</span>
-            <span className="threat-legend-pct">{seg.percentage}%</span>
+            <span className="threat-legend-pct">{total > 0 ? `${seg.percentage}%` : 'N/A'}</span>
           </div>
         ))}
       </div>

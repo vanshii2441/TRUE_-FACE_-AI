@@ -18,27 +18,30 @@ function SecurityAlert({ alerts, onViewDetails }) {
 
       <div className="threat-alert-list">
         {alerts.length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
-            No high or medium risk security incidents recorded.
+          <div style={{ padding: '28px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+            No high or medium risk security incidents recorded. Perimeter is secure.
           </div>
         ) : (
           alerts.map((alert) => (
-            <div className={`threat-alert-item ${riskClasses[alert.riskLevel]}`} key={alert.id} id={`alert-${alert.id}`}>
+            <div className={`threat-alert-item ${riskClasses[alert.riskLevel] || 'warning'}`} key={alert.id} id={`alert-${alert.id}`}>
               <div className="threat-alert-top">
-                <span className={`badge badge-${riskClasses[alert.riskLevel]}`}>
-                  {alert.riskLevel.toUpperCase()} RISK
+                <span className={`badge badge-${riskClasses[alert.riskLevel] || 'warning'}`}>
+                  {alert.riskLevel ? `${alert.riskLevel.toUpperCase()} RISK` : 'N/A'}
                 </span>
               </div>
-              <h4 className="threat-alert-title">{alert.title}</h4>
+              <h4 className="threat-alert-title">{alert.title || 'Security Incident'}</h4>
               <div className="threat-alert-meta">
-                <span>{alert.source}</span>
+                <span>{alert.source || 'N/A'}</span>
                 <span className="threat-alert-dot">•</span>
-                <span>{alert.time}</span>
+                <span>{alert.time || 'N/A'}</span>
               </div>
               {onViewDetails && (
                 <button
+                  type="button"
                   className="threat-alert-link"
                   onClick={() => onViewDetails(alert)}
+                  id={`alert-view-details-${alert.id}`}
+                  title="View full event details"
                 >
                   View Details →
                 </button>
