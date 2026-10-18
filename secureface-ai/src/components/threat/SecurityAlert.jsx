@@ -17,30 +17,35 @@ function SecurityAlert({ alerts, onViewDetails }) {
       </h3>
 
       <div className="threat-alert-list">
-        {alerts.map((alert) => (
-          <div className={`threat-alert-item ${riskClasses[alert.riskLevel]}`} key={alert.id} id={`alert-${alert.id}`}>
-            <div className="threat-alert-top">
-              <span className={`badge badge-${riskClasses[alert.riskLevel]}`}>
-                {alert.riskLevel === 'High' ? '🚨' : alert.riskLevel === 'Medium' ? '⚠️' : 'ℹ️'}{' '}
-                {alert.riskLevel.toUpperCase()} RISK
-              </span>
-            </div>
-            <h4 className="threat-alert-title">{alert.title}</h4>
-            <div className="threat-alert-meta">
-              <span>{alert.source}</span>
-              <span className="threat-alert-dot">•</span>
-              <span>{alert.time}</span>
-            </div>
-            {onViewDetails && (
-              <button
-                className="threat-alert-link"
-                onClick={() => onViewDetails(alert)}
-              >
-                View Details →
-              </button>
-            )}
+        {alerts.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+            No high or medium risk security incidents recorded.
           </div>
-        ))}
+        ) : (
+          alerts.map((alert) => (
+            <div className={`threat-alert-item ${riskClasses[alert.riskLevel]}`} key={alert.id} id={`alert-${alert.id}`}>
+              <div className="threat-alert-top">
+                <span className={`badge badge-${riskClasses[alert.riskLevel]}`}>
+                  {alert.riskLevel.toUpperCase()} RISK
+                </span>
+              </div>
+              <h4 className="threat-alert-title">{alert.title}</h4>
+              <div className="threat-alert-meta">
+                <span>{alert.source}</span>
+                <span className="threat-alert-dot">•</span>
+                <span>{alert.time}</span>
+              </div>
+              {onViewDetails && (
+                <button
+                  className="threat-alert-link"
+                  onClick={() => onViewDetails(alert)}
+                >
+                  View Details →
+                </button>
+              )}
+            </div>
+          ))
+        )}
       </div>
     </div>
   )

@@ -7,6 +7,7 @@ import ThreatTrendChart from '../components/threat/ThreatTrendChart'
 import SecurityAlert from '../components/threat/SecurityAlert'
 import ThreatSources from '../components/threat/ThreatSources'
 import { getVerificationHistory } from '../services/api'
+import Breadcrumb from '../components/Breadcrumb'
 
 function mapDecisionToThreat(log, idx) {
   const ts = log.timestamp ? new Date(log.timestamp) : new Date()
@@ -180,25 +181,31 @@ function ThreatMonitor() {
   }
 
   return (
-    <div className="animate-in threat-monitor-page">
+    <div className="threat-container animate-in">
+      <Breadcrumb items={[{ label: 'Threat Monitor' }]} />
+
       {/* Page Header */}
-      <div className="threat-page-header">
-        <div className="threat-header-left">
-          <h1>
-            <span className="gradient-text">Threat Monitor</span>
-          </h1>
-          <p>Monitor and analyze real-time biometric security events from backend audit logs.</p>
+      <div className="page-header-row">
+        <div>
+          <h1 className="page-title">Biometric Threat Monitor</h1>
+          <p className="page-subtitle">Real-time surveillance of presentation spoofing, synthetic deepfakes, and perimeter verification incidents.</p>
         </div>
-        <div className="threat-header-actions">
+        <div className="header-actions-group">
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={fetchLogs}
             disabled={loading}
             id="header-refresh-btn"
           >
-            🔄 {loading ? 'Loading...' : 'Refresh'}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`btn-icon ${loading ? 'spin' : ''}`}>
+              <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+            </svg>
+            {loading ? 'Refreshing...' : 'Refresh'}
           </button>
           <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={() =>
               setActiveFilter((prev) => {
@@ -209,17 +216,22 @@ function ThreatMonitor() {
             }
             id="header-filter-btn"
           >
-            Filter ({activeFilter})
+            Filter: {activeFilter}
           </button>
-          <button className="btn btn-primary btn-sm" onClick={handleExport} id="header-export-btn">
-            Export
+          <button type="button" className="btn btn-primary btn-sm" onClick={handleExport} id="header-export-btn">
+            Export Logs
           </button>
         </div>
       </div>
 
       {error && (
-        <div style={{ padding: '16px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', marginBottom: '24px' }}>
-          ⚠️ {error}
+        <div className="alert-banner alert-danger mb-20">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="alert-icon">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>{error}</span>
         </div>
       )}
 

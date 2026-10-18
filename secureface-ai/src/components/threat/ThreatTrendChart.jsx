@@ -5,7 +5,8 @@ function ThreatTrendChart({ data, activeRange, onRangeChange }) {
     { key: 'month', label: 'Last 30 Days' },
   ]
 
-  const maxValue = Math.max(...data.map((d) => d.value))
+  const maxValue = Math.max(0, ...(data || []).map((d) => d.value || 0))
+  const displayMax = maxValue > 0 ? maxValue : 4
 
   return (
     <div className="card threat-trend-card" id="threat-trend">
@@ -35,10 +36,10 @@ function ThreatTrendChart({ data, activeRange, onRangeChange }) {
       <div className="threat-chart-area">
         {/* Y-axis labels */}
         <div className="threat-chart-yaxis">
-          <span>{maxValue}</span>
-          <span>{Math.round(maxValue * 0.75)}</span>
-          <span>{Math.round(maxValue * 0.5)}</span>
-          <span>{Math.round(maxValue * 0.25)}</span>
+          <span>{displayMax}</span>
+          <span>{Math.round(displayMax * 0.75)}</span>
+          <span>{Math.round(displayMax * 0.5)}</span>
+          <span>{Math.round(displayMax * 0.25)}</span>
           <span>0</span>
         </div>
 

@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { getUsers, resetUsers } from '../services/api'
+import { getUsers, resetUsers, deleteUser } from '../services/api'
+import Breadcrumb from '../components/Breadcrumb'
 
 function formatDate(isoString) {
   if (!isoString) return 'N/A'
-
   try {
-    return new Date(isoString).toLocaleDateString('en-IN', {
+    return new Date(isoString).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -23,609 +23,320 @@ function Users() {
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [resetting, setResetting] = useState(false)
-  const [selectedUser, setSelectedUser] = useState(null)
-
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState('All')
+  const [deletingId, setDeletingId] = useState(null)
+  const [resetting, setResetting] = useState(false)
+  const [actionMessage, setActionMessage] = useState(null)
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true)
     setError(null)
-
     try {
       const data = await getUsers()
       setUsers(data.users || [])
-      setTotalCount(data.total_enrolled || 0)
+      setTotalCount(data.total_enrolled ?? (data.users || []).length)
     } catch (err) {
-      setError(err.message || 'Failed to fetch enrolled users.')
+      setError(err.message || 'Failed to fetch enrolled identities from vector database.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchUsers()
-  }, [])
+  }, [fetchUsers])
+
+  const handleDeleteUser = async (userId, name) => {
+    if (!window.confirm(`Are you sure you want to delete enrolled identity "${name}" (${userId})? This will remove their 512d biometric vector from FAISS.`)) {
+      return
+    }
+
+    setDeletingId(userId)
+    setActionMessage(null)
+    try {
+      await deleteUser(userId)
+      setActionMessage(`Identity "${name}" (${userId}) was deleted successfully.`)
+      setTimeout(() => setActionMessage(null), 4000)
+      await fetchUsers()
+    } catch (err) {
+      alert(`Failed to delete user: ${err.message}`)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const handleReset = async () => {
     if (
       !window.confirm(
-        'Are you sure you want to reset the FAISS vector database? All enrolled face vectors will be deleted.'
+        'WARNING: Are you sure you want to reset the FAISS vector database? All enrolled face vectors and identity records will be permanently erased.'
       )
     ) {
       return
     }
 
     setResetting(true)
-
+    setActionMessage(null)
     try {
       await resetUsers()
+      setActionMessage('Vector store cleared successfully. All enrolled vectors removed.')
+      setTimeout(() => setActionMessage(null), 4000)
       await fetchUsers()
     } catch (err) {
-      alert('Failed to reset vector database: ' + err.message)
+      alert(`Failed to reset vector database: ${err.message}`)
     } finally {
       setResetting(false)
     }
   }
 
   const filteredUsers = users.filter((user) => {
-    const query = searchQuery.toLowerCase().trim()
-
-    const matchesSearch =
-      !query ||
-      String(user.name || '').toLowerCase().includes(query) ||
-      String(user.user_id || '').toLowerCase().includes(query) ||
-      String(user.faiss_id || '').toLowerCase().includes(query)
-
-    const matchesStatus =
-      statusFilter === 'All' || statusFilter === 'Active'
-
-    return matchesSearch && matchesStatus
+    const q = searchQuery.toLowerCase().trim()
+    if (!q) return true
+    return (
+      String(user.name || '').toLowerCase().includes(q) ||
+      String(user.user_id || '').toLowerCase().includes(q) ||
+      String(user.faiss_id || '').includes(q) ||
+      String(user.metadata?.email || '').toLowerCase().includes(q)
+    )
   })
 
   return (
-    <div className="animate-in users-page">
+    <div className="users-container animate-in">
+      <Breadcrumb items={[{ label: 'Registered Users' }]} />
 
-      {/* Page Header */}
-      <div className="page-header users-page-header">
-        <div className="users-header-content">
-          <div>
-            <h1>
-              <span className="gradient-text">Registered Users</span>
-            </h1>
+      <div className="page-header-row">
+        <div>
+          <h1 className="page-title">Enrolled Identity Registry</h1>
+          <p className="page-subtitle">
+            Search, inspect, and manage identities enrolled in the FAISS 1:N vector database.
+          </p>
+        </div>
 
-            <p>
-              Manage all identities enrolled in the FAISS 1:N vector database.
-              Search, view identity records, or reset the enrolled vector index.
+        <div className="header-actions-group">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={fetchUsers}
+            disabled={loading}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`btn-icon ${loading ? 'spin' : ''}`}>
+              <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+            </svg>
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+
+          <Link to="/register" className="btn btn-primary btn-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="btn-icon">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <line x1="19" y1="8" x2="19" y2="14" />
+              <line x1="16" y1="11" x2="22" y2="11" />
+            </svg>
+            Enroll User
+          </Link>
+
+          {users.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm danger-text"
+              onClick={handleReset}
+              disabled={resetting || loading}
+            >
+              {resetting ? 'Resetting Index...' : 'Reset Vector DB'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Action Notification Box */}
+      {actionMessage && (
+        <div className="alert-banner alert-success mb-20 animate-in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="alert-icon">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>{actionMessage}</span>
+        </div>
+      )}
+
+      {/* Error Banner */}
+      {error && (
+        <div className="alert-banner alert-danger mb-20">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="alert-icon">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>{error}</span>
+          <button type="button" className="btn btn-secondary btn-sm ml-auto" onClick={fetchUsers}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* 3 Registry KPI Cards */}
+      <div className="metrics-grid mb-24">
+        <div className="metric-card">
+          <div className="metric-header">
+            <span className="metric-label">ENROLLED IDENTITIES</span>
+            <div className="metric-icon-box primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+          </div>
+          <div className="metric-value">{loading ? '...' : totalCount}</div>
+          <div className="metric-footer">
+            <span className="metric-caption">Active profiles in FAISS vector store</span>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-header">
+            <span className="metric-label">EMBEDDING MODEL</span>
+            <div className="metric-icon-box info">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+            </div>
+          </div>
+          <div className="metric-value">512-d</div>
+          <div className="metric-footer">
+            <span className="metric-caption">InceptionResNetV1 ArcFace L2 normalized</span>
+          </div>
+        </div>
+
+        <div className="metric-card">
+          <div className="metric-header">
+            <span className="metric-label">VECTOR INDEX TYPE</span>
+            <div className="metric-icon-box success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+            </div>
+          </div>
+          <div className="metric-value">IndexFlatIP</div>
+          <div className="metric-footer">
+            <span className="metric-caption">Exhaustive inner-product cosine search</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Database Table Card */}
+      <div className="card mb-24">
+        <div className="card-header">
+          <div className="card-header-title-group">
+            <h3 className="card-title">Enrolled Biometric Profiles</h3>
+            <p className="card-subtitle">
+              {filteredUsers.length} of {totalCount} matching identities
             </p>
           </div>
 
-          <div className="users-header-actions">
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={fetchUsers}
-              disabled={loading}
-              id="refresh-users-btn"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
+          <div className="search-input-group">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="search-icon">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              className="input search-input"
+              placeholder="Filter by name, user ID, or index..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              id="users-search-input"
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="empty-state-box">
+            <div className="spin mb-8">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spin-icon">
                 <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
                 <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
               </svg>
-              {loading ? 'Refreshing...' : 'Refresh'}
-            </button>
-
-            <Link
-              to="/register"
-              className="btn btn-primary btn-sm"
-              id="register-user-btn"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="9" cy="7" r="4" />
-                <path d="M17 11v6" />
-                <path d="M14 14h6" />
-                <path d="M3 21v-2a4 4 0 0 1 4-4h4" />
+            </div>
+            <p>Loading enrolled identities from vector database...</p>
+          </div>
+        ) : users.length === 0 ? (
+          <div className="empty-state-box">
+            <div className="empty-state-icon-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M6 21v-2a6 6 0 0 1 12 0v2" />
               </svg>
-              Register User
+            </div>
+            <h4 className="empty-state-title">Identity Registry is Empty</h4>
+            <p className="empty-state-text">
+              No biometric face vectors have been registered in the FAISS database.
+              Enroll an identity to enable live 1:N facial recognition.
+            </p>
+            <Link to="/register" className="btn btn-primary btn-sm mt-12" id="empty-enroll-first-btn">
+              Enroll First Identity
             </Link>
-
-            <button
-              className="btn btn-danger btn-sm"
-              onClick={handleReset}
-              disabled={resetting || users.length === 0}
-              id="reset-vector-db-btn"
-            >
-              {resetting ? 'Resetting...' : 'Reset Vector DB'}
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="empty-state-box">
+            <p className="empty-state-text">No identities match the search query &quot;{searchQuery}&quot;.</p>
+            <button type="button" className="btn btn-secondary btn-sm mt-8" onClick={() => setSearchQuery('')}>
+              Clear Search Filter
             </button>
           </div>
-        </div>
-      </div>
-
-      {/* Stats Row */}
-      <div className="grid-3 mb-24">
-
-        {/* Total Users */}
-        <div className="stat-card animate-in animate-delay-1">
-          <div className="card-icon primary">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3.87-4" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </div>
-
-          <div className="stat-info">
-            <div className="stat-label">Registered Identities</div>
-            <div className="stat-value">{totalCount}</div>
-          </div>
-        </div>
-
-        {/* Embedding Index */}
-        <div className="stat-card animate-in animate-delay-2">
-          <div className="card-icon success">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2v20" />
-              <path d="M2 12h20" />
-              <path d="M4.93 4.93l14.14 14.14" />
-              <path d="M19.07 4.93L4.93 19.07" />
-            </svg>
-          </div>
-
-          <div className="stat-info">
-            <div className="stat-label">Embedding Index</div>
-            <div className="stat-value">512-D</div>
-          </div>
-        </div>
-
-        {/* Anti Spoofing */}
-        <div className="stat-card animate-in animate-delay-3">
-          <div className="card-icon warning">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
-          </div>
-
-          <div className="stat-info">
-            <div className="stat-label">Anti-Spoofing</div>
-            <div className="stat-value users-active-value">
-              Active
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Identity Database Section */}
-      <section className="users-database-section">
-
-        <div className="users-section-header">
-          <div>
-            <div className="section-title">
-              Identity Database
-            </div>
-
-            <p className="users-section-subtitle">
-              Enrolled biometric identities available for 1:N facial matching.
-            </p>
-          </div>
-
-          {!loading && !error && (
-            <div className="users-record-count">
-              <span className="status-dot online" />
-              Showing {filteredUsers.length} of {users.length} records
-            </div>
-          )}
-        </div>
-
-        {/* Search & Filter */}
-        {!loading && !error && users.length > 0 && (
-          <div className="users-controls card">
-
-            <div className="users-search-box">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-4-4" />
-              </svg>
-
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, User ID, or FAISS ID..."
-                aria-label="Search registered users"
-                id="users-search"
-              />
-
-              {searchQuery && (
-                <button
-                  type="button"
-                  className="users-search-clear"
-                  onClick={() => setSearchQuery('')}
-                  aria-label="Clear search"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-
-            <div className="users-filter-box">
-              <label htmlFor="users-status-filter">
-                Status
-              </label>
-
-              <select
-                id="users-status-filter"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="All">All Users</option>
-                <option value="Active">Active</option>
-              </select>
-            </div>
-          </div>
-        )}
-
-        {/* Loading */}
-        {loading && (
-          <div className="card users-state-card">
-            <div className="users-state-icon loading">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              >
-                <path d="M12 2v4" />
-                <path d="M12 18v4" />
-                <path d="m4.93 4.93 2.83 2.83" />
-                <path d="m16.24 16.24 2.83 2.83" />
-                <path d="M2 12h4" />
-                <path d="M18 12h4" />
-              </svg>
-            </div>
-
-            <h3>Loading Identity Database</h3>
-
-            <p>
-              Fetching enrolled user records from the FastAPI backend...
-            </p>
-          </div>
-        )}
-
-        {/* Error */}
-        {!loading && error && (
-          <div className="card users-state-card users-error-card">
-            <div className="users-state-icon error">
-              ⚠️
-            </div>
-
-            <h3>Unable to Load Users</h3>
-
-            <p>{error}</p>
-
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={fetchUsers}
-            >
-              Try Again
-            </button>
-          </div>
-        )}
-
-        {/* Empty Database */}
-        {!loading && !error && users.length === 0 && (
-          <div className="card users-empty-state">
-
-            <div className="users-empty-visual">
-              <div className="users-empty-ring ring-one" />
-              <div className="users-empty-ring ring-two" />
-
-              <div className="users-empty-icon">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M3 21v-2a4 4 0 0 1 4-4h4" />
-                  <path d="M17 11v6" />
-                  <path d="M14 14h6" />
-                </svg>
-              </div>
-            </div>
-
-            <div className="users-empty-content">
-              <span className="badge badge-neutral">
-                No Identities Enrolled
-              </span>
-
-              <h3>Your identity database is empty</h3>
-
-              <p>
-                Register a user's face to generate a biometric embedding
-                and add the identity to the FAISS 1:N recognition index.
-              </p>
-
-              <Link
-                to="/register"
-                className="btn btn-primary"
-                id="empty-register-user-btn"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M17 11v6" />
-                  <path d="M14 14h6" />
-                  <path d="M3 21v-2a4 4 0 0 1 4-4h4" />
-                </svg>
-                Register First User
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {/* No Search Results */}
-        {!loading &&
-          !error &&
-          users.length > 0 &&
-          filteredUsers.length === 0 && (
-            <div className="card users-state-card">
-              <div className="users-state-icon">
-                🔎
-              </div>
-
-              <h3>No Matching Users</h3>
-
-              <p>
-                No registered identity matches your current search or filter.
-              </p>
-
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  setSearchQuery('')
-                  setStatusFilter('All')
-                }}
-              >
-                Clear Filters
-              </button>
-            </div>
-          )}
-
-        {/* Users Table */}
-        {!loading &&
-          !error &&
-          filteredUsers.length > 0 && (
-            <div
-              className="table-container animate-in animate-delay-2"
-              id="users-table"
-            >
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>FAISS ID</th>
-                    <th>User ID</th>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Enrolled Timestamp</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr
-  key={user.faiss_id || user.user_id}
-  className="users-table-row"
-  title={`View details for ${user.name}`}
-  onClick={() => setSelectedUser(user)}
-  tabIndex={0}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      setSelectedUser(user)
-    }
-  }}
->
-<td>
-                        <span
-                          style={{
-                            fontFamily: 'monospace',
-                            color: 'var(--text-muted)',
-                          }}
-                        >
-                          #{user.faiss_id}
-                        </span>
-                      </td>
-
-                      <td>
-                        <span
-                          style={{
-                            fontFamily: 'monospace',
-                            fontWeight: 600,
-                            color: 'var(--primary)',
-                          }}
-                        >
-                          {user.user_id}
-                        </span>
-                      </td>
-
-                      <td
-                        style={{
-                          color: 'var(--text-primary)',
-                          fontWeight: 500,
-                        }}
+        ) : (
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Index</th>
+                  <th>User ID</th>
+                  <th>Full Name</th>
+                  <th>Contact Email</th>
+                  <th>Enrolled Timestamp</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user.user_id}>
+                    <td className="monospace-text text-muted">
+                      #{user.faiss_id ?? '0'}
+                    </td>
+                    <td className="identity-cell">
+                      <strong className="monospace-text">{user.user_id}</strong>
+                    </td>
+                    <td>
+                      <span className="font-semibold text-primary">{user.name}</span>
+                    </td>
+                    <td className="text-secondary">
+                      {user.metadata?.email || user.email || <span className="text-muted">N/A</span>}
+                    </td>
+                    <td className="timestamp-cell">
+                      {formatDate(user.enrolled_at)}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-xs danger-text"
+                        onClick={() => handleDeleteUser(user.user_id, user.name)}
+                        disabled={deletingId === user.user_id}
+                        title={`Delete ${user.name}`}
                       >
-                        {user.name}
-                      </td>
-
-                      <td>
-                        <span className="badge badge-success">
-                          <span
-                            className="status-dot online"
-                            style={{
-                              width: '6px',
-                              height: '6px',
-                            }}
-                          />
-                          Enrolled & Active
-                        </span>
-                      </td>
-
-                      <td>
-                        {formatDate(user.enrolled_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-      </section>
-      {/* Selected User Details */}
-      {selectedUser && (
-        <div className="user-details-overlay">
-          <div className="user-details-panel">
-
-            <div className="user-details-header">
-              <div>
-                <span className="badge badge-success">
-                  <span className="status-dot online" />
-                  Active Identity
-                </span>
-
-                <h2>{selectedUser.name}</h2>
-
-                <p>
-                  Registered biometric identity details
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="users-search-clear"
-                onClick={() => setSelectedUser(null)}
-                aria-label="Close user details"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="user-details-grid">
-
-              <div className="user-detail-item">
-                <span className="user-detail-label">User ID</span>
-                <strong>{selectedUser.user_id || 'N/A'}</strong>
-              </div>
-
-              <div className="user-detail-item">
-                <span className="user-detail-label">FAISS ID</span>
-                <strong>
-                  #{selectedUser.faiss_id ?? 'N/A'}
-                </strong>
-              </div>
-
-              <div className="user-detail-item">
-                <span className="user-detail-label">Enrollment Status</span>
-                <strong className="user-detail-success">
-                  Enrolled & Active
-                </strong>
-              </div>
-
-              <div className="user-detail-item">
-                <span className="user-detail-label">Embedding</span>
-                <strong>512-D Vector</strong>
-              </div>
-
-              <div className="user-detail-item">
-                <span className="user-detail-label">
-                  Anti-Spoofing
-                </span>
-                <strong className="user-detail-success">
-                  Protected
-                </strong>
-              </div>
-
-              <div className="user-detail-item">
-                <span className="user-detail-label">
-                  Enrolled On
-                </span>
-                <strong>
-                  {formatDate(selectedUser.enrolled_at)}
-                </strong>
-              </div>
-
-            </div>
-
-            <div className="user-details-footer">
-              <span>
-                Identity available for 1:N facial recognition.
-              </span>
-
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setSelectedUser(null)}
-              >
-                Close
-              </button>
-            </div>
-
+                        {deletingId === user.user_id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

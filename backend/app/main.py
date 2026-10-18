@@ -82,7 +82,7 @@ is_wildcard = "*" in settings.cors_origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins if not is_wildcard else ["*"],
-    allow_origin_regex=r"^https?://.*" if is_wildcard else None,
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -15,8 +15,16 @@ secureface-ai/node_modules/
 secureface-ai/dist/
 dist/
 
-# Environment & IDE
+# Environment & Secrets (NEVER COMMIT)
 .env
+.env.*
+*.env
+backend/.env
+backend/.env.*
+secureface-ai/.env
+secureface-ai/.env.*
+
+# IDE
 .vscode/
 .idea/
 *.swp

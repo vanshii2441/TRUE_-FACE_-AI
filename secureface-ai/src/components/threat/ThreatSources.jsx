@@ -11,26 +11,32 @@ function ThreatSources({ sources }) {
       </h3>
 
       <div className="threat-source-list">
-        {sources.map((source, i) => {
-          const percentage = (source.count / source.max) * 100
-          return (
-            <div className="threat-source-item" key={source.name} id={`source-${i}`}>
-              <div className="threat-source-top">
-                <span className="threat-source-name">{source.name}</span>
-                <span className="threat-source-count">{source.count} Threats</span>
+        {sources.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+            No perimeter terminal activity recorded.
+          </div>
+        ) : (
+          sources.map((source, i) => {
+            const percentage = (source.count / source.max) * 100
+            return (
+              <div className="threat-source-item" key={source.name} id={`source-${i}`}>
+                <div className="threat-source-top">
+                  <span className="threat-source-name">{source.name}</span>
+                  <span className="threat-source-count">{source.count} Events</span>
+                </div>
+                <div className="threat-source-track">
+                  <div
+                    className="threat-source-fill"
+                    style={{
+                      width: `${percentage}%`,
+                      animationDelay: `${i * 0.1}s`,
+                    }}
+                  />
+                </div>
               </div>
-              <div className="threat-source-track">
-                <div
-                  className="threat-source-fill"
-                  style={{
-                    width: `${percentage}%`,
-                    animationDelay: `${i * 0.1}s`,
-                  }}
-                />
-              </div>
-            </div>
-          )
-        })}
+            )
+          })
+        )}
       </div>
     </div>
   )

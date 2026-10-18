@@ -1,428 +1,547 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import { getAnalyticsOverview, getDetailedHealth, getVerificationHistory } from '../services/api'
-import SecurityAlert from '../components/threat/SecurityAlert'
-import ThreatSources from '../components/threat/ThreatSources'
+import Breadcrumb from '../components/Breadcrumb'
 
 function Home() {
-  const scrollToAnalytics = () => {
-    document.getElementById('dashboard-analytics')?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    })
-  }
+  const { backendStatus, onRefreshBackend } = useOutletContext() || {}
 
   const [stats, setStats] = useState(null)
   const [health, setHealth] = useState(null)
   const [recentLogs, setRecentLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [lastUpdated, setLastUpdated] = useState(null)
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const [analyticsData, healthData, historyData] = await Promise.all([
-        getAnalyticsOverview(),
-        getDetailedHealth(),
-        getVerificationHistory(50).catch(() => ({ history: [] })),
+        getAnalyticsOverview().catch(() => null),
+        getDetailedHealth().catch(() => null),
+        getVerificationHistory(10).catch(() => ({ history: [] })),
       ])
+
       setStats(analyticsData)
       setHealth(healthData)
-      setRecentLogs(historyData.history || [])
+      setRecentLogs(historyData?.history || [])
+      setLastUpdated(new Date())
+
+      if (!analyticsData && !healthData) {
+        setError('FastAPI backend service is currently unreachable. Please verify server is running on port 8000.')
+      }
     } catch (err) {
       console.error('Error fetching dashboard overview:', err)
-      setError('Backend server disconnected. Please verify FastAPI backend service is active.')
+      setError(err.message || 'Failed to load telemetry from backend.')
     } finally {
       setLoading(false)
+      if (onRefreshBackend) onRefreshBackend()
     }
-  }, [])
+  }, [onRefreshBackend])
 
   useEffect(() => {
     fetchDashboardData()
   }, [fetchDashboardData])
 
-  // Derive genuine security alerts from recent audit logs
-  const alerts = recentLogs
-    .filter((log) => !log.is_authenticated)
-    .slice(0, 5)
-    .map((log, idx) => ({
-      id: log.id || idx + 1,
-      riskLevel: log.final_decision === 'DEEPFAKE_SUSPECTED' || log.final_decision === 'LIVENESS_FAILED' ? 'High' : 'Medium',
-      title: `${log.final_decision.replace('_', ' ')} Detected`,
-      source: log.identity || (log.user_id ? `User ${log.user_id}` : 'Terminal 01'),
-      time: log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
-    }))
+  const isOnline = backendStatus?.online || (health && health.api_status === 'ONLINE')
+  const totalVerifications = stats?.total_verifications ?? 0
+  const enrolledCount = stats?.total_enrolled_users ?? backendStatus?.enrolled_faces ?? 0
 
-  // Derive genuine threat sources from recent audit logs
-  const sourceCounts = {}
-  recentLogs.forEach((log) => {
-    const src = log.identity || (log.user_id ? `User ${log.user_id}` : 'Terminal 01')
-    sourceCounts[src] = (sourceCounts[src] || 0) + 1
-  })
-  const threatSources = Object.entries(sourceCounts)
-    .map(([name, count]) => ({ name, count, max: Math.max(10, count) }))
-    .slice(0, 5)
+  const getDecisionBadge = (decision, isAuth) => {
+    if (isAuth) {
+      return <span className="status-badge badge-success">Verified</span>
+    }
+    switch (decision) {
+      case 'DEEPFAKE_SUSPECTED':
+        return <span className="status-badge badge-purple">Deepfake</span>
+      case 'LIVENESS_FAILED':
+        return <span className="status-badge badge-danger">Spoof Detected</span>
+      case 'UNKNOWN_PERSON':
+        return <span className="status-badge badge-warning">Unrecognized</span>
+      case 'POOR_QUALITY':
+        return <span className="status-badge badge-warning">Low Quality</span>
+      case 'NO_FACE':
+        return <span className="status-badge badge-neutral">No Face</span>
+      case 'MULTIPLE_FACES':
+        return <span className="status-badge badge-warning">Multiple Faces</span>
+      default:
+        return <span className="status-badge badge-danger">Rejected</span>
+    }
+  }
 
   return (
-    <div className="animate-in" style={{ paddingBottom: '40px' }}>
-      {/* Header */}
-      <div className="page-header">
-        <h1>
-          <span className="gradient-text">True Face AI</span> Admin Dashboard
-        </h1>
-        <p>
-          Real-time biometric security metrics, user enrollment analytics, AI model readiness matrix, and authentication performance indicators.
-        </p>
-        <button
-          className="btn btn-secondary dashboard-scroll-btn"
-          onClick={scrollToAnalytics}
-          id="dashboard-scroll-analytics"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+    <div className="dashboard-container animate-in">
+      <Breadcrumb items={[{ label: 'Dashboard' }]} />
+
+      {/* Page Header */}
+      <div className="page-header-row">
+        <div>
+          <h1 className="page-title">Enterprise Biometric Dashboard</h1>
+          <p className="page-subtitle">
+            Real-time biometric security metrics, enrolled identity index, and neural model readiness.
+          </p>
+        </div>
+
+        <div className="header-actions-group">
+          {lastUpdated && (
+            <span className="last-updated-text">
+              Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+          )}
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={fetchDashboardData}
+            disabled={loading}
+            id="refresh-dashboard-btn"
           >
-            <path d="M12 5v14" />
-            <path d="m19 12-7 7-7-7" />
-          </svg>
-          Explore System Analytics
-        </button>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`btn-icon ${loading ? 'spin' : ''}`}
+            >
+              <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+            </svg>
+            {loading ? 'Refreshing...' : 'Refresh Telemetry'}
+          </button>
+        </div>
       </div>
 
+      {/* Backend Offline Warning Banner */}
       {error && (
-        <div style={{ padding: '16px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', marginBottom: '24px' }}>
-          ⚠️ <strong>Dashboard Connection Alert:</strong> {error}
+        <div className="alert-banner alert-danger mb-20" role="alert">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="alert-icon">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <div className="alert-content">
+            <strong>Backend Connection Offline:</strong> {error}
+          </div>
+          <button className="btn btn-sm btn-secondary" onClick={fetchDashboardData}>
+            Retry
+          </button>
         </div>
       )}
 
-      {/* Primary Analytics Metric Cards */}
-      <div className="section-title" id="dashboard-analytics">
-        Biometric System Analytics Overview
-      </div>
-      {loading ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-          Loading real-time system metrics...
-        </div>
-      ) : stats ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-          {/* Total Enrolled Users */}
-          <div className="card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontWeight: 600 }}>ENROLLED USERS</span>
-              <span className="card-icon primary" style={{ width: '32px', height: '32px', fontSize: '14px' }}>👥</span>
+      {/* 4 Primary Verified Telemetry KPI Cards */}
+      <div className="metrics-grid mb-24">
+        {/* Card 1: Enrolled Identities */}
+        <div className="metric-card">
+          <div className="metric-header">
+            <span className="metric-label">ENROLLED IDENTITIES</span>
+            <div className="metric-icon-box primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
             </div>
-            <div style={{ fontSize: 'var(--font-3xl)', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {stats.total_enrolled_users}
-            </div>
-            <span style={{ fontSize: 'var(--font-xs)', color: '#10b981', fontWeight: 600, marginTop: '4px', display: 'block' }}>
-              ● {stats.active_users} Active Identities
-            </span>
           </div>
-
-          {/* Total Verifications */}
-          <div className="card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontWeight: 600 }}>TOTAL ATTEMPTS</span>
-              <span className="card-icon info" style={{ width: '32px', height: '32px', fontSize: '14px' }}>🔍</span>
-            </div>
-            <div style={{ fontSize: 'var(--font-3xl)', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {stats.total_verifications}
-            </div>
-            <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              Recorded in audit store
-            </span>
+          <div className="metric-value">
+            {loading && !stats ? '...' : enrolledCount}
           </div>
-
-          {/* Success Rate */}
-          <div className="card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontWeight: 600 }}>SUCCESS RATE</span>
-              <span className="card-icon success" style={{ width: '32px', height: '32px', fontSize: '14px' }}>✅</span>
-            </div>
-            <div style={{ fontSize: 'var(--font-3xl)', fontWeight: 800, color: '#10b981' }}>
-              {stats.success_rate_percent}%
-            </div>
-            <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              {stats.successful_verifications} authenticated matches
-            </span>
-          </div>
-
-          {/* Avg Latency */}
-          <div className="card" style={{ padding: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontWeight: 600 }}>AVG LATENCY</span>
-              <span className="card-icon warning" style={{ width: '32px', height: '32px', fontSize: '14px' }}>⚡</span>
-            </div>
-            <div style={{ fontSize: 'var(--font-3xl)', fontWeight: 800, color: 'var(--primary)' }}>
-              {stats.avg_verification_time_ms} ms
-            </div>
-            <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-              End-to-end pipeline time
+          <div className="metric-footer">
+            <span className="status-indicator-dot online" />
+            <span className="metric-caption">
+              {enrolledCount === 0 ? 'No identities enrolled' : `${enrolledCount} Vector Index Profiles`}
             </span>
           </div>
         </div>
-      ) : null}
 
-      {/* Security Incident Counters */}
-      {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-          <div className="card" style={{ borderLeft: '4px solid #f59e0b', background: 'rgba(245,158,11,0.05)' }}>
-            <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', display: 'block' }}>Unknown User Attempts</span>
-            <div style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: '#f59e0b', marginTop: '4px' }}>
-              ❓ {stats.unknown_user_attempts} Unrecognized
+        {/* Card 2: Total Verification Attempts */}
+        <div className="metric-card">
+          <div className="metric-header">
+            <span className="metric-label">TOTAL ATTEMPTS</span>
+            <div className="metric-icon-box info">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
             </div>
           </div>
-
-          <div className="card" style={{ borderLeft: '4px solid #ef4444', background: 'rgba(239,68,68,0.05)' }}>
-            <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', display: 'block' }}>Liveness Spoof Alerts</span>
-            <div style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: '#ef4444', marginTop: '4px' }}>
-              🚫 {stats.liveness_failures} Presentation Attacks
-            </div>
+          <div className="metric-value">
+            {loading && !stats ? '...' : totalVerifications}
           </div>
-
-          <div className="card" style={{ borderLeft: '4px solid #8b5cf6', background: 'rgba(139,92,246,0.05)' }}>
-            <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', display: 'block' }}>Deepfake Synthetic Alerts</span>
-            <div style={{ fontSize: 'var(--font-xl)', fontWeight: 700, color: '#8b5cf6', marginTop: '4px' }}>
-              🤖 {stats.deepfake_suspected_attempts} AI Manipulations
-            </div>
+          <div className="metric-footer">
+            <span className="metric-caption">
+              {totalVerifications === 0
+                ? 'Recorded in audit store'
+                : `${stats?.successful_verifications || 0} Successful Authentications`}
+            </span>
           </div>
         </div>
-      )}
 
-      {/* Dashboard Security Insights */}
-      {stats && health && (
-        <>
-          <div className="section-title">Security & AI Insights</div>
-
-          <div className="dashboard-insights-grid">
-            {/* Security Posture */}
-            <div className="card dashboard-insight-card">
-              <div className="dashboard-insight-header">
-                <div>
-                  <div className="card-title">Security Posture</div>
-                  <div className="card-description">
-                    Current biometric protection level
-                  </div>
-                </div>
-
-                <span className="card-icon success">🛡️</span>
-              </div>
-
-              <div className="insight-status">
-                <span className={`status-dot ${health.status === 'ONLINE' ? 'online' : 'offline'}`} />
-                <strong>{health.overall_status === 'ALL_SYSTEMS_OPERATIONAL' ? 'Protected' : health.overall_status === 'PARTIALLY_OPERATIONAL' ? 'Partially Protected' : 'Degraded'}</strong>
-              </div>
-
-              <div className="insight-progress">
-                <div
-                  className="insight-progress-fill"
-                  style={{ width: `${Math.min(stats.success_rate_percent, 100)}%` }}
-                />
-              </div>
-
-              <div className="insight-footer">
-                <span>Authentication reliability</span>
-                <strong>{stats.success_rate_percent}%</strong>
-              </div>
-            </div>
-
-            {/* Authentication Activity */}
-            <div className="card dashboard-insight-card">
-              <div className="dashboard-insight-header">
-                <div>
-                  <div className="card-title">Authentication Activity</div>
-                  <div className="card-description">
-                    Verification performance
-                  </div>
-                </div>
-
-                <span className="card-icon info">🔐</span>
-              </div>
-
-              <div className="activity-stats">
-                <div>
-                  <strong>{stats.successful_verifications}</strong>
-                  <span>Successful</span>
-                </div>
-
-                <div>
-                  <strong>{stats.total_verifications - stats.successful_verifications}</strong>
-                  <span>Failed</span>
-                </div>
-              </div>
-
-              <div className="insight-footer">
-                <span>Total verification attempts</span>
-                <strong>{stats.total_verifications}</strong>
-              </div>
-            </div>
-
-            {/* AI Pipeline */}
-            <div className="card dashboard-insight-card">
-              <div className="dashboard-insight-header">
-                <div>
-                  <div className="card-title">AI Security Pipeline</div>
-                  <div className="card-description">
-                    Multi-layer verification models
-                  </div>
-                </div>
-
-                <span className="card-icon primary">🤖</span>
-              </div>
-
-              <div className="pipeline-status-list">
-                <div>
-                  <span className={`status-dot ${health.face_detection_model_status === 'ONLINE' ? 'online' : 'offline'}`} />
-                  <span>Face Detection</span>
-                  <strong>{health.face_detection_model_status}</strong>
-                </div>
-
-                <div>
-                  <span className={`status-dot ${health.liveness_model_status === 'ONLINE' ? 'online' : 'offline'}`} />
-                  <span>Anti-Spoofing</span>
-                  <strong>{health.liveness_model_status}</strong>
-                </div>
-
-                <div>
-                  <span className={`status-dot ${health.deepfake_model_status === 'ONLINE' ? 'online' : 'offline'}`} />
-                  <span>Deepfake Analysis</span>
-                  <strong>{health.deepfake_model_status}</strong>
-                </div>
-              </div>
+        {/* Card 3: Authentication Reliability */}
+        <div className="metric-card">
+          <div className="metric-header">
+            <span className="metric-label">SUCCESS RATE</span>
+            <div className="metric-icon-box success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
             </div>
           </div>
-        </>
-      )}
-
-      {/* Threat Intelligence */}
-      <div className="section-title">
-        Threat Intelligence
-      </div>
-
-      <div className="dashboard-threat-grid">
-        {threatSources.length > 0 ? (
-          <ThreatSources sources={threatSources} />
-        ) : (
-          <div className="card" style={{ padding: '20px', color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
-            No threat sources recorded.
+          <div className="metric-value">
+            {loading && !stats
+              ? '...'
+              : totalVerifications > 0
+              ? `${stats.success_rate_percent}%`
+              : 'N/A'}
           </div>
-        )}
-
-        {alerts.length > 0 ? (
-          <SecurityAlert alerts={alerts} />
-        ) : (
-          <div className="card" style={{ padding: '20px', color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
-            No security alerts recorded.
+          <div className="metric-footer">
+            <span className="metric-caption">
+              {totalVerifications > 0
+                ? `${stats.successful_verifications} of ${totalVerifications} Verified`
+                : 'Awaiting verification attempts'}
+            </span>
           </div>
-        )}
+        </div>
+
+        {/* Card 4: Average Pipeline Latency */}
+        <div className="metric-card">
+          <div className="metric-header">
+            <span className="metric-label">PIPELINE LATENCY</span>
+            <div className="metric-icon-box warning">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </div>
+          </div>
+          <div className="metric-value">
+            {loading && !stats
+              ? '...'
+              : totalVerifications > 0 && stats.avg_verification_time_ms > 0
+              ? `${stats.avg_verification_time_ms} ms`
+              : 'N/A'}
+          </div>
+          <div className="metric-footer">
+            <span className="metric-caption">
+              {totalVerifications > 0 && stats.avg_verification_time_ms > 0
+                ? 'Detection + Embedding + FAISS'
+                : 'Awaiting pipeline execution'}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Primary Navigation */}
-      <div className="section-title">Primary Navigation</div>
-      <div className="quick-actions mb-24">
-        <Link to="/authenticate" className="btn btn-primary" id="action-verify-identity">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            <path d="M9 12l2 2 4-4" />
-          </svg>
-          Verify Identity
-        </Link>
-        <Link to="/register" className="btn btn-secondary" id="action-enroll-user">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <line x1="19" y1="8" x2="19" y2="14" />
-          </svg>
-          Enroll User
-        </Link>
-        <Link to="/users" className="btn btn-secondary" id="action-view-users">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-          </svg>
-          Manage Users
-        </Link>
-        <Link to="/audit-logs" className="btn btn-secondary" id="action-audit-logs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          Audit Logs
-        </Link>
-        <Link to="/system-status" className="btn btn-secondary" id="action-system-status">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-          </svg>
-          System Status
-        </Link>
-      </div>
-
-      {/* System Health Summary Bar */}
-      {health && (
+      {/* Grid Row: Pipeline Status & Security Incident Telemetry */}
+      <div className="dashboard-grid-2 mb-24">
+        {/* Left: Verified AI & Infrastructure Pipeline */}
         <div className="card">
-          <div className="card-header" style={{ justifyContent: 'space-between' }}>
-            <span className="card-title">Live System Status</span>
-            <span className={`badge ${health.status === 'ONLINE' ? 'badge-success' : 'badge-warning'}`}>
-              {health.status}
+          <div className="card-header">
+            <div className="card-header-title-group">
+              <h3 className="card-title">AI Biometric Pipeline Status</h3>
+              <p className="card-subtitle">Verified status of neural models, vector search, and storage</p>
+            </div>
+            <span className={`status-badge ${isOnline ? 'badge-success' : 'badge-danger'}`}>
+              {isOnline ? 'Pipeline Active' : 'Offline'}
             </span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginTop: '12px' }}>
-            <div>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>FastAPI Server</span>
-              <p style={{ fontWeight: 700, margin: 0, color: '#10b981' }}>{health.api_status}</p>
+
+          <div className="pipeline-table-wrapper">
+            <div className="pipeline-item">
+              <div className="pipeline-item-info">
+                <div className="pipeline-item-name">FastAPI REST Server</div>
+                <div className="pipeline-item-desc">REST API endpoints & CORS gateway</div>
+              </div>
+              <span className={`status-badge ${health?.api_status === 'ONLINE' ? 'badge-success' : 'badge-danger'}`}>
+                {health?.api_status || (isOnline ? 'ONLINE' : 'OFFLINE')}
+              </span>
             </div>
-            <div>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>FAISS Vector Store</span>
-              <p style={{ fontWeight: 700, margin: 0, color: '#10b981' }}>{health.database_status}</p>
+
+            <div className="pipeline-item">
+              <div className="pipeline-item-info">
+                <div className="pipeline-item-name">FAISS Vector Store</div>
+                <div className="pipeline-item-desc">IndexFlatIP 512d L2 normalized cosine matching</div>
+              </div>
+              <span className={`status-badge ${health?.database_status === 'ONLINE' ? 'badge-success' : 'badge-danger'}`}>
+                {health?.database_status || (isOnline ? 'ONLINE' : 'OFFLINE')}
+              </span>
             </div>
-            <div>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Face Detection (MTCNN)</span>
-              <p style={{ fontWeight: 700, margin: 0, color: health.face_detection_model_status === 'ONLINE' ? '#10b981' : '#f59e0b' }}>
-                {health.face_detection_model_status}
-              </p>
+
+            <div className="pipeline-item">
+              <div className="pipeline-item-info">
+                <div className="pipeline-item-name">MTCNN Face Detector</div>
+                <div className="pipeline-item-desc">Multi-task Cascaded PyTorch CNN (P-Net, R-Net, O-Net)</div>
+              </div>
+              <span className={`status-badge ${health?.face_detection_model_status === 'ONLINE' ? 'badge-success' : 'badge-warning'}`}>
+                {health?.face_detection_model_status || 'CHECKING'}
+              </span>
             </div>
-            <div>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>LivenessNet Anti-Spoofing</span>
-              <p style={{ fontWeight: 700, margin: 0, color: health.liveness_model_status === 'ONLINE' ? '#10b981' : '#f59e0b' }}>
-                {health.liveness_model_status}
-              </p>
+
+            <div className="pipeline-item">
+              <div className="pipeline-item-info">
+                <div className="pipeline-item-name">InceptionResNetV1 (ArcFace)</div>
+                <div className="pipeline-item-desc">Deep residual feature extractor pretrained on VGGFace2</div>
+              </div>
+              <span className={`status-badge ${health?.face_embedding_model_status === 'ONLINE' ? 'badge-success' : 'badge-warning'}`}>
+                {health?.face_embedding_model_status || 'CHECKING'}
+              </span>
             </div>
-            <div>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>DeepfakeNet Synthetic</span>
-              <p style={{ fontWeight: 700, margin: 0, color: health.deepfake_model_status === 'ONLINE' ? '#10b981' : '#f59e0b' }}>
-                {health.deepfake_model_status}
-              </p>
+
+            <div className="pipeline-item">
+              <div className="pipeline-item-info">
+                <div className="pipeline-item-name">LivenessNet Anti-Spoofing</div>
+                <div className="pipeline-item-desc">Passive 2D print & screen replay attack classifier</div>
+              </div>
+              <span className={`status-badge ${health?.liveness_model_status === 'ONLINE' ? 'badge-success' : 'badge-warning'}`}>
+                {health?.liveness_model_status || 'CHECKING'}
+              </span>
+            </div>
+
+            <div className="pipeline-item">
+              <div className="pipeline-item-info">
+                <div className="pipeline-item-name">DeepfakeNet Synthetic Detector</div>
+                <div className="pipeline-item-desc">Face-swap & GAN artifact analyzer (Initialized mode)</div>
+              </div>
+              <span className={`status-badge ${health?.deepfake_model_status === 'ONLINE' ? 'badge-success' : 'badge-neutral'}`}>
+                {health?.deepfake_model_status || 'UNAVAILABLE'}
+              </span>
             </div>
           </div>
         </div>
-      )}
 
-      <button
-        className="dashboard-back-to-top"
-        onClick={() =>
-          window.scrollTo({
-            top: 0,
-            behavior: 'smooth',
-          })
-        }
-        aria-label="Back to top"
-        title="Back to top"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="m18 15-6-6-6 6" />
-        </svg>
-      </button>
+        {/* Right: Security Incident Telemetry */}
+        <div className="card">
+          <div className="card-header">
+            <div className="card-header-title-group">
+              <h3 className="card-title">Security Incident Telemetry</h3>
+              <p className="card-subtitle">Actual counts aggregated from verification audit logs</p>
+            </div>
+            <span className="status-badge badge-neutral">Live Audit</span>
+          </div>
+
+          <div className="incident-cards-stack">
+            <div className="incident-row warning-border">
+              <div className="incident-icon-box warning">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <div className="incident-content">
+                <div className="incident-title">Unrecognized Identity Attempts</div>
+                <div className="incident-desc">Faces below cosine similarity threshold</div>
+              </div>
+              <div className="incident-count warning-text">
+                {stats?.unknown_user_attempts ?? 0}
+              </div>
+            </div>
+
+            <div className="incident-row danger-border">
+              <div className="incident-icon-box danger">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <div className="incident-content">
+                <div className="incident-title">Liveness Spoof Detections</div>
+                <div className="incident-desc">Presentation attacks intercepted by LivenessNet</div>
+              </div>
+              <div className="incident-count danger-text">
+                {stats?.liveness_failures ?? 0}
+              </div>
+            </div>
+
+            <div className="incident-row purple-border">
+              <div className="incident-icon-box purple">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </div>
+              <div className="incident-content">
+                <div className="incident-title">Deepfake Suspicion Events</div>
+                <div className="incident-desc">Synthetic face manipulation flags</div>
+              </div>
+              <div className="incident-count purple-text">
+                {stats?.deepfake_suspected_attempts ?? 0}
+              </div>
+            </div>
+          </div>
+
+          <div className="card-footer-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mini-icon">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            <span>Telemetry reflects real stored audit records. No simulated events.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Verification Activity (Real Records) */}
+      <div className="card mb-24">
+        <div className="card-header">
+          <div className="card-header-title-group">
+            <h3 className="card-title">Recent Authentication Activity</h3>
+            <p className="card-subtitle">Chronological record of recent biometric verification queries</p>
+          </div>
+          <Link to="/audit-logs" className="btn btn-secondary btn-sm" id="view-all-logs-btn">
+            View Complete Audit Trail →
+          </Link>
+        </div>
+
+        {loading && recentLogs.length === 0 ? (
+          <div className="empty-state-box">
+            <div className="spin mb-8">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="spin-icon">
+                <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+                <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+              </svg>
+            </div>
+            <p>Loading verification audit records...</p>
+          </div>
+        ) : recentLogs.length === 0 ? (
+          <div className="empty-state-box">
+            <div className="empty-state-icon-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            </div>
+            <h4 className="empty-state-title">No Verification Records Found</h4>
+            <p className="empty-state-text">
+              No authentication events have been recorded in the audit store yet.
+              Execute a face verification test to populate live security telemetry.
+            </p>
+            <Link to="/authenticate" className="btn btn-primary btn-sm mt-12" id="empty-verify-cta-btn">
+              Launch Verify Identity
+            </Link>
+          </div>
+        ) : (
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Identified Person</th>
+                  <th>Decision</th>
+                  <th>Similarity</th>
+                  <th>Liveness</th>
+                  <th>Pipeline Latency</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentLogs.map((log, index) => (
+                  <tr key={log.id || index}>
+                    <td className="timestamp-cell">
+                      {log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'N/A'}
+                    </td>
+                    <td className="identity-cell">
+                      <strong>{log.identity || 'Unauthenticated'}</strong>
+                      {log.user_id && <span className="user-id-sub">ID: {log.user_id}</span>}
+                    </td>
+                    <td>{getDecisionBadge(log.final_decision, log.is_authenticated)}</td>
+                    <td className="metric-cell">
+                      {log.similarity_score !== undefined ? `${((log.similarity_score || 0) * 100).toFixed(1)}%` : 'N/A'}
+                    </td>
+                    <td className="metric-cell">
+                      {log.liveness_score !== undefined ? `${((log.liveness_score || 0) * 100).toFixed(1)}%` : 'N/A'}
+                    </td>
+                    <td className="latency-cell">
+                      {log.timing_ms?.total_ms ? `${log.timing_ms.total_ms} ms` : 'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Primary Actions Navigation Grid */}
+      <div className="section-heading mb-16">
+        <h3>Platform Management Modules</h3>
+      </div>
+      <div className="quick-actions-grid">
+        <Link to="/authenticate" className="action-card" id="home-action-verify">
+          <div className="action-icon-box primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          </div>
+          <div className="action-content">
+            <h4>Verify Identity</h4>
+            <p>Live camera and upload facial verification against 1:N FAISS database.</p>
+          </div>
+          <span className="action-arrow">→</span>
+        </Link>
+
+        <Link to="/register" className="action-card" id="home-action-enroll">
+          <div className="action-icon-box info">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <line x1="19" y1="8" x2="19" y2="14" />
+              <line x1="16" y1="11" x2="22" y2="11" />
+            </svg>
+          </div>
+          <div className="action-content">
+            <h4>Enroll User</h4>
+            <p>Register a new identity with anti-spoofing and ArcFace 512d vectors.</p>
+          </div>
+          <span className="action-arrow">→</span>
+        </Link>
+
+        <Link to="/users" className="action-card" id="home-action-users">
+          <div className="action-icon-box success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </div>
+          <div className="action-content">
+            <h4>Registered Users</h4>
+            <p>Search, inspect, and manage identities enrolled in the vector store.</p>
+          </div>
+          <span className="action-arrow">→</span>
+        </Link>
+
+        <Link to="/audit-logs" className="action-card" id="home-action-audit">
+          <div className="action-icon-box warning">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+          </div>
+          <div className="action-content">
+            <h4>Audit Logs</h4>
+            <p>Full compliance trail with decision explanations, timestamps, and filters.</p>
+          </div>
+          <span className="action-arrow">→</span>
+        </Link>
+
+        <Link to="/system-status" className="action-card" id="home-action-status">
+          <div className="action-icon-box neutral">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+          </div>
+          <div className="action-content">
+            <h4>System Diagnostics</h4>
+            <p>Deep hardware, neural net readiness, threshold settings, and latency.</p>
+          </div>
+          <span className="action-arrow">→</span>
+        </Link>
+      </div>
     </div>
   )
 }

@@ -7,7 +7,7 @@ function ThreatDistribution({ data }) {
   let cumulativeOffset = 0
 
   const segments = data.map((item) => {
-    const percentage = (item.count / total) * 100
+    const percentage = total > 0 ? (item.count / total) * 100 : 0
     const segmentLength = (percentage / 100) * circumference
     const offset = cumulativeOffset
     cumulativeOffset += segmentLength

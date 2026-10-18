@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getDetailedHealth, getThresholds, updateThresholds, adminLogin, API_BASE_URL } from '../services/api'
+import Breadcrumb from '../components/Breadcrumb'
 
 function SystemStatus() {
   const [health, setHealth] = useState(null)
@@ -32,6 +33,7 @@ function SystemStatus() {
   const [thresholdMsg, setThresholdMsg] = useState(null)
 
   const isMountedRef = useRef(true)
+  const hasLoadedRef = useRef(false)
 
   useEffect(() => {
     isMountedRef.current = true
@@ -45,7 +47,7 @@ function SystemStatus() {
     if (isManualRefresh) {
       setIsRefreshing(true)
       setRefreshStep('Connecting to FastAPI Backend...')
-    } else if (!health) {
+    } else if (!hasLoadedRef.current) {
       setLoading(true)
     }
 
@@ -71,6 +73,7 @@ function SystemStatus() {
       }
 
       if (isMountedRef.current) {
+        hasLoadedRef.current = true
         setHealth(hData)
         if (tData) setThresholds(tData)
         setApiLatency(latency)
@@ -89,7 +92,7 @@ function SystemStatus() {
         setRefreshStep('Idle')
       }
     }
-  }, [health])
+  }, [])
 
   // Initial load
   useEffect(() => {
@@ -176,7 +179,6 @@ function SystemStatus() {
         label: 'BACKEND OFFLINE',
         badgeClass: 'badge-danger',
         dotColor: '#ef4444',
-        icon: '⚫',
         description: `Unable to communicate with FastAPI server at ${API_BASE_URL}`,
       }
     }
@@ -187,23 +189,20 @@ function SystemStatus() {
         label: 'ALL SYSTEMS OPERATIONAL',
         badgeClass: 'badge-success',
         dotColor: '#10b981',
-        icon: '🟢',
-        description: 'All 6 biometric services, neural networks, and FAISS database are operating normally.',
+        description: 'All biometric services, neural networks, and FAISS database are operating normally.',
       }
     } else if (st === 'PARTIALLY_OPERATIONAL' || st === 'DEGRADED') {
       return {
         label: 'PARTIALLY OPERATIONAL',
         badgeClass: 'badge-warning',
         dotColor: '#f59e0b',
-        icon: '🟡',
-        description: 'Core recognition engine is online. Some anti-spoofing/deepfake models are running in fallback mode.',
+        description: 'Core recognition engine is online. Deepfake/spoof detector operating in initialized mode.',
       }
     } else {
       return {
         label: 'SYSTEM DEGRADED',
         badgeClass: 'badge-danger',
         dotColor: '#ef4444',
-        icon: '🔴',
         description: 'Critical biometric components are unavailable or reporting operational errors.',
       }
     }
@@ -214,30 +213,29 @@ function SystemStatus() {
     switch (st) {
       case 'ONLINE':
         return (
-          <span className="badge badge-success" style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+          <span className="status-badge badge-success">
+            <span className="status-indicator-dot online" />
             ONLINE
           </span>
         )
       case 'DEGRADED':
         return (
-          <span className="badge badge-warning" style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+          <span className="status-badge badge-warning">
+            <span className="status-indicator-dot warning" />
             DEGRADED
           </span>
         )
       case 'MODEL_UNAVAILABLE':
       case 'UNAVAILABLE':
         return (
-          <span className="badge badge-warning" style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <span>⚠️</span>
-            MODEL UNAVAILABLE
+          <span className="status-badge badge-neutral">
+            UNAVAILABLE
           </span>
         )
       default:
         return (
-          <span className="badge badge-danger" style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+          <span className="status-badge badge-danger">
+            <span className="status-indicator-dot offline" />
             ERROR
           </span>
         )
@@ -248,7 +246,8 @@ function SystemStatus() {
   const comp = health?.components || {}
 
   return (
-    <div className="animate-in" style={{ paddingBottom: '40px' }}>
+    <div className="system-status-container animate-in">
+      <Breadcrumb items={[{ label: 'System Status' }]} />
       {/* Page Header with Overall Status & Controls */}
       <div
         className="page-header"
@@ -286,7 +285,7 @@ function SystemStatus() {
                 color: overallInfo.dotColor,
               }}
             >
-              <span>{overallInfo.icon}</span>
+              <span className={`status-indicator-dot ${overallInfo.dotColor === '#10b981' ? 'online' : overallInfo.dotColor === '#f59e0b' ? 'warning' : 'offline'}`} />
               <span>{overallInfo.label}</span>
             </div>
           </div>
@@ -297,14 +296,14 @@ function SystemStatus() {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
             <span>
-              ⏱️ Last Checked:{' '}
+              Last Checked:{' '}
               <strong style={{ color: 'var(--text-primary)' }}>
                 {lastChecked ? lastChecked.toLocaleTimeString() : 'Checking...'}
               </strong>
             </span>
             {apiLatency !== null && (
               <span>
-                ⚡ Latency:{' '}
+                Latency:{' '}
                 <strong style={{ color: apiLatency < 100 ? '#10b981' : '#f59e0b' }}>
                   {apiLatency} ms
                 </strong>
@@ -330,7 +329,7 @@ function SystemStatus() {
                 }}
               >
                 <span style={{ fontSize: '11px', fontWeight: 700, color: '#10b981' }}>
-                  🔑 Admin ({adminUser})
+                  Admin ({adminUser})
                 </span>
                 <button
                   className="btn btn-secondary btn-sm"

@@ -1,10 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { registerUser, sendOtp, verifyOtp } from '../services/api'
+import Breadcrumb from '../components/Breadcrumb'
 
 function Register() {
-  const [formData, setFormData] = useState({ userId: '', name: '', email: '' })
+  const [formData, setFormData] = useState({
+    userId: '',
+    name: '',
+    email: '',
+  })
   const [formErrors, setFormErrors] = useState({})
 
+  // OTP Verification state
   const [otp, setOtp] = useState('')
   const [otpSent, setOtpSent] = useState(false)
   const [otpVerified, setOtpVerified] = useState(false)
@@ -12,7 +19,7 @@ function Register() {
   const [otpMessage, setOtpMessage] = useState('')
   const [cooldown, setCooldown] = useState(0)
 
-  // Resend cooldown timer countdown
+  // Cooldown countdown timer
   useEffect(() => {
     if (cooldown <= 0) return
     const timer = setInterval(() => {
@@ -21,15 +28,14 @@ function Register() {
     return () => clearInterval(timer)
   }, [cooldown])
 
-
+  // Image capture & upload state
   const [inputMode, setInputMode] = useState('upload') // 'upload' | 'camera'
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
 
-  // Status state: 'idle' | 'uploading' | 'detecting' | 'checking liveness' | 'processing embedding' | 'enrolling' | 'success' | 'error'
-  const [status, setStatus] = useState('idle')
-  const [activeStep, setActiveStep] = useState(0)
-  const [result, setResult] = useState(null)
+  // Submission state
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [enrollmentResult, setEnrollmentResult] = useState(null)
   const [apiError, setApiError] = useState(null)
 
   // Camera state
@@ -40,21 +46,16 @@ function Register() {
   const fileInputRef = useRef(null)
   const streamRef = useRef(null)
 
-  const steps = [
-    { label: '1. Face Detection', desc: 'MTCNN Localization' },
-    { label: '2. Quality Check', desc: 'Blur & Illumination' },
-    { label: '3. Liveness Check', desc: 'Anti-Spoofing CNN' },
-    { label: '4. Deepfake Check', desc: 'DeepfakeNet Model' },
-    { label: '5. Face Processing', desc: '512d ArcFace Embedding' },
-    { label: '6. FAISS Update', desc: '1:N Vector Indexing' },
-    { label: '7. Completed', desc: 'User Registration' },
-  ]
-
-  useEffect(() => {
-    return () => {
-      stopCamera()
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
     }
-  }, [])
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    setCameraActive(false)
+  }
 
   const startCamera = async () => {
     setCameraError(null)
@@ -69,18 +70,16 @@ function Register() {
       setCameraActive(true)
     } catch (err) {
       console.error('Camera error:', err)
-      setCameraError('Unable to access webcam. Please check permissions or upload an image file.')
+      setCameraError('Unable to access webcam. Check permissions or upload a photo.')
       setCameraActive(false)
     }
   }
 
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
+  useEffect(() => {
+    return () => {
+      stopCamera()
     }
-    setCameraActive(false)
-  }
+  }, [])
 
   const handleModeChange = (mode) => {
     setInputMode(mode)
@@ -105,10 +104,10 @@ function Register() {
 
     canvas.toBlob((blob) => {
       if (blob) {
-        const file = new File([blob], `enrollment_snapshot_${Date.now()}.jpg`, { type: 'image/jpeg' })
+        const file = new File([blob], `enrollment_${Date.now()}.jpg`, { type: 'image/jpeg' })
         setSelectedFile(file)
         setPreviewUrl(URL.createObjectURL(blob))
-        setResult(null)
+        setEnrollmentResult(null)
         setApiError(null)
       }
     }, 'image/jpeg', 0.95)
@@ -117,29 +116,27 @@ function Register() {
   const handleRetake = () => {
     setSelectedFile(null)
     setPreviewUrl(null)
-    setResult(null)
+    setEnrollmentResult(null)
     setApiError(null)
   }
 
   const handleFileChange = (e) => {
     const file = e.target.files[0]
     if (file) {
-      // Validate file type
       const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/bmp']
       if (!validTypes.includes(file.type)) {
-        setApiError('Unsupported file type. Please upload a JPEG, PNG, WebP, or BMP image.')
+        setApiError('Unsupported format. Please upload a JPEG, PNG, or WebP image.')
         return
       }
 
-      // Validate max image size (10MB)
       if (file.size > 10 * 1024 * 1024) {
-        setApiError('Image file size exceeds the 10 MB maximum limit.')
+        setApiError('File size exceeds 10 MB maximum limit.')
         return
       }
 
       setSelectedFile(file)
       setPreviewUrl(URL.createObjectURL(file))
-      setResult(null)
+      setEnrollmentResult(null)
       setApiError(null)
     }
   }
@@ -151,31 +148,27 @@ function Register() {
       setFormErrors((prev) => ({ ...prev, [name]: null }))
     }
     if (name === 'email') {
-      // Reset OTP verification state if user alters their email address
       setOtp('')
       setOtpSent(false)
       setOtpVerified(false)
       setOtpMessage('')
       setCooldown(0)
-      if (formErrors.otp) {
-        setFormErrors((prev) => ({ ...prev, otp: null }))
-      }
     }
   }
 
   const handleSendOtp = async () => {
     const emailClean = formData.email.trim()
     if (!emailClean) {
-      setFormErrors((prev) => ({ ...prev, email: 'Email Address is required to send OTP.' }))
+      setFormErrors((prev) => ({ ...prev, email: 'Email address is required to dispatch OTP.' }))
       return
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) {
-      setFormErrors((prev) => ({ ...prev, email: 'Please enter a valid email address.' }))
+      setFormErrors((prev) => ({ ...prev, email: 'Enter a valid email address.' }))
       return
     }
 
     setOtpLoading(true)
-    setOtpMessage('Sending OTP verification code...')
+    setOtpMessage('Sending verification OTP...')
     setApiError(null)
 
     try {
@@ -183,18 +176,16 @@ function Register() {
       setOtpSent(true)
       setOtpVerified(false)
       setCooldown(res.cooldown_seconds || 60)
-      setOtpMessage(res.message || `OTP sent to ${emailClean}. Valid for 2 minutes.`)
+      setOtpMessage(res.message || `OTP code sent to ${emailClean}. Valid for 2 minutes.`)
     } catch (err) {
-      console.error('Failed to send OTP:', err)
       setOtpMessage('')
-      // If error message indicates seconds remaining, update cooldown timer
       const match = err.message?.match(/(\d+)\s*seconds/)
       if (match) {
         setCooldown(parseInt(match[1], 10))
       }
       setFormErrors((prev) => ({
         ...prev,
-        email: err.message || 'Failed to send OTP code. Please try again.',
+        email: err.message || 'Failed to dispatch OTP. Verify SMTP configuration.',
       }))
     } finally {
       setOtpLoading(false)
@@ -203,14 +194,13 @@ function Register() {
 
   const handleVerifyOtp = async () => {
     const emailClean = formData.email.trim()
-    if (!emailClean) return
-    if (otp.length !== 6) {
-      setOtpMessage('OTP code must be 6 digits.')
+    if (!emailClean || otp.length !== 6) {
+      setOtpMessage('Please enter the complete 6-digit code.')
       return
     }
 
     setOtpLoading(true)
-    setOtpMessage('Verifying OTP code...')
+    setOtpMessage('Verifying code...')
     setApiError(null)
 
     try {
@@ -221,12 +211,11 @@ function Register() {
         setFormErrors((prev) => ({ ...prev, otp: null }))
       }
     } catch (err) {
-      console.error('Failed to verify OTP:', err)
       setOtpVerified(false)
       setOtpMessage('')
       setFormErrors((prev) => ({
         ...prev,
-        otp: err.message || 'Invalid or expired OTP. Please try again.',
+        otp: err.message || 'Invalid or expired OTP code.',
       }))
     } finally {
       setOtpLoading(false)
@@ -242,25 +231,23 @@ function Register() {
     if (!userIdClean) {
       errors.userId = 'User ID is required.'
     } else if (!/^[A-Za-z0-9_-]{3,32}$/.test(userIdClean)) {
-      errors.userId = 'User ID must be 3-32 characters (letters, numbers, hyphens, underscores).'
+      errors.userId = 'User ID must be 3-32 characters (alphanumeric, hyphens, underscores).'
     }
 
     if (!nameClean) {
-      errors.name = 'Full Name is required.'
+      errors.name = 'Full display name is required.'
     } else if (nameClean.length < 2) {
-      errors.name = 'Full Name must be at least 2 characters.'
+      errors.name = 'Name must be at least 2 characters.'
     }
 
     if (!emailClean) {
-      errors.email = 'Email Address is required.'
+      errors.email = 'Corporate or academic email address is compulsory for biometric registration.'
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailClean)) {
-      errors.email = 'Please enter a valid email address.'
-    } else if (!otpVerified) {
-      errors.otp = 'Please verify your email address using the 6-digit OTP before submitting registration.'
+      errors.email = 'Please provide a valid corporate or academic email address (e.g. name@gla.ac.in).'
     }
 
     if (!selectedFile) {
-      errors.file = 'Please select or capture a face image for enrollment.'
+      errors.file = 'Please provide a face image via live camera capture or photo upload.'
     }
 
     setFormErrors(errors)
@@ -270,42 +257,25 @@ function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!validateForm()) {
+    if (!validateForm() || isSubmitting) {
       return
     }
 
-    setStatus('uploading')
-    setActiveStep(0)
+    setIsSubmitting(true)
     setApiError(null)
-    setResult(null)
-
-    // Simulate multi-stage visual progression
-    const t1 = setTimeout(() => { setStatus('detecting'); setActiveStep(1) }, 200)
-    const t2 = setTimeout(() => { setStatus('checking liveness'); setActiveStep(2) }, 500)
-    const t3 = setTimeout(() => { setStatus('processing embedding'); setActiveStep(4) }, 800)
-    const t4 = setTimeout(() => { setStatus('enrolling'); setActiveStep(5) }, 1100)
+    setEnrollmentResult(null)
 
     try {
       const payload = new FormData()
       payload.append('user_id', formData.userId.trim())
       payload.append('name', formData.name.trim())
-      if (formData.email.trim()) {
-        payload.append('email', formData.email.trim())
-      }
+      payload.append('email', formData.email.trim())
       payload.append('file', selectedFile)
 
       const response = await registerUser(payload)
+      setEnrollmentResult(response)
 
-      clearTimeout(t1)
-      clearTimeout(t2)
-      clearTimeout(t3)
-      clearTimeout(t4)
-
-      setActiveStep(6)
-      setStatus('success')
-      setResult(response)
-
-      // Reset form
+      // Clear form on success
       setFormData({ userId: '', name: '', email: '' })
       setOtp('')
       setOtpSent(false)
@@ -314,477 +284,473 @@ function Register() {
       setSelectedFile(null)
       setPreviewUrl(null)
     } catch (err) {
-      clearTimeout(t1)
-      clearTimeout(t2)
-      clearTimeout(t3)
-      clearTimeout(t4)
-
-      setStatus('error')
-
-      // Parse structured error detail
-      const errMsg = err.message || 'Enrollment request failed.'
-      setApiError(errMsg)
+      setApiError(err.message || 'Enrollment request failed.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   return (
-    <div className="animate-in">
-      <div className="page-header">
-        <h1>User Registration & Biometric Enrollment</h1>
-        <p>
-          Register a new identity with MTCNN detection, quality checks, passive anti-spoofing, deepfake verification, 512d ArcFace embedding, and FAISS vector indexing.
-        </p>
+    <div className="register-container animate-in">
+      <Breadcrumb items={[{ label: 'Enroll User' }]} />
+
+      <div className="page-header-row">
+        <div>
+          <h1 className="page-title">Biometric Identity Enrollment</h1>
+          <p className="page-subtitle">
+            Extract and store a 512-dimensional ArcFace embedding in the FAISS vector database with passive anti-spoofing gating.
+          </p>
+        </div>
       </div>
 
-      <div className="register-layout" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '24px' }}>
-        {/* Left: User Details Form */}
+      {/* Stepper Progress Bar */}
+      <div className="enrollment-stepper-bar mb-24">
+        <div className="stepper-step active">
+          <span className="step-number">01</span>
+          <div className="step-info">
+            <span className="step-title">Identity & Contact</span>
+            <span className="step-desc">ID, Name & Compulsory Email</span>
+          </div>
+        </div>
+        <div className="stepper-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </div>
+        <div className={`stepper-step ${selectedFile ? 'active' : ''}`}>
+          <span className="step-number">02</span>
+          <div className="step-info">
+            <span className="step-title">Biometric Capture</span>
+            <span className="step-desc">Frontal Facial Photo</span>
+          </div>
+        </div>
+        <div className="stepper-arrow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </div>
+        <div className={`stepper-step ${enrollmentResult ? 'active' : ''}`}>
+          <span className="step-number">03</span>
+          <div className="step-info">
+            <span className="step-title">FAISS Vector Index</span>
+            <span className="step-desc">512d ArcFace Vector</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="register-two-column-layout mb-24">
+        {/* Left Column: Enrollment Form */}
         <div className="card">
           <div className="card-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div className="card-icon primary">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <line x1="19" y1="8" x2="19" y2="14" />
-                  <line x1="16" y1="11" x2="22" y2="11" />
-                </svg>
-              </div>
-              <span className="card-title">Enrollment Details</span>
+            <div className="card-header-title-group">
+              <h3 className="card-title">Identity Profile Credentials</h3>
+              <p className="card-subtitle">Provide unique user attributes and compulsory contact</p>
             </div>
-            {status === 'success' && <span className="badge badge-success">Enrolled</span>}
           </div>
 
-          <form className="register-form" onSubmit={handleSubmit} id="register-form">
-            {/* User ID */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="userId">
-                User ID <span style={{ color: '#ef4444' }}>*</span>
+          <form onSubmit={handleSubmit} noValidate>
+            {/* User ID Field */}
+            <div className="form-group mb-16">
+              <label htmlFor="userId" className="form-label">
+                User ID <span className="required-mark">*</span>
               </label>
-              <input
-                className={`form-input ${formErrors.userId ? 'error' : ''}`}
-                type="text"
-                id="userId"
-                name="userId"
-                placeholder="e.g. USR001"
-                value={formData.userId}
-                onChange={handleChange}
-                disabled={status !== 'idle' && status !== 'success' && status !== 'error'}
-              />
-              {formErrors.userId && (
-                <div style={{ fontSize: 'var(--font-xs)', color: '#ef4444', marginTop: '4px' }}>
-                  {formErrors.userId}
-                </div>
+              <div className="input-with-icon-group">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="input-leading-icon">
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <circle cx="9" cy="10" r="2" />
+                  <line x1="15" y1="8" x2="17" y2="8" />
+                  <line x1="15" y1="12" x2="17" y2="12" />
+                  <line x1="7" y1="16" x2="17" y2="16" />
+                </svg>
+                <input
+                  id="userId"
+                  type="text"
+                  name="userId"
+                  className={`input ${formErrors.userId ? 'input-error' : ''}`}
+                  placeholder="e.g. USR_1042"
+                  value={formData.userId}
+                  onChange={handleChange}
+                  disabled={isSubmitting}
+                  autoComplete="off"
+                />
+              </div>
+              {formErrors.userId ? (
+                <span className="field-error-text">{formErrors.userId}</span>
+              ) : (
+                <span className="field-hint-text">Unique alphanumeric identifier used for 1:N FAISS recognition lookups.</span>
               )}
             </div>
 
-            {/* Full Name */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="name">
-                Full Display Name <span style={{ color: '#ef4444' }}>*</span>
+            {/* Full Name Field */}
+            <div className="form-group mb-16">
+              <label htmlFor="name" className="form-label">
+                Full Display Name <span className="required-mark">*</span>
               </label>
-              <input
-                className={`form-input ${formErrors.name ? 'error' : ''}`}
-                type="text"
-                id="name"
-                name="name"
-                placeholder="e.g. Aarav Sharma"
-                value={formData.name}
-                onChange={handleChange}
-                disabled={status !== 'idle' && status !== 'success' && status !== 'error'}
-              />
-              {formErrors.name && (
-                <div style={{ fontSize: 'var(--font-xs)', color: '#ef4444', marginTop: '4px' }}>
-                  {formErrors.name}
-                </div>
-              )}
+              <div className="input-with-icon-group">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="input-leading-icon">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                <input
+                  id="name"
+                  type="text"
+                  name="name"
+                  className={`input ${formErrors.name ? 'input-error' : ''}`}
+                  placeholder="e.g. Sarah Jenkins"
+                  value={formData.name}
+                  onChange={handleChange}
+                  disabled={isSubmitting}
+                />
+              </div>
+              {formErrors.name && <span className="field-error-text">{formErrors.name}</span>}
             </div>
 
-            {/* Email / Identifier */}
-            <div className="form-group">
-              <label className="form-label" htmlFor="email">
-                Email Address <span style={{ color: '#ef4444' }}>*</span>
+            {/* Compulsory Email & OTP Section */}
+            <div className="form-group mb-20">
+              <label htmlFor="email" className="form-label">
+                Email Address <span className="required-mark">*</span>
               </label>
-              <input
-                className={`form-input ${formErrors.email ? 'error' : ''}`}
-                type="email"
-                id="email"
-                name="email"
-                placeholder="e.g. aarav@example.com"
-                value={formData.email}
-                onChange={handleChange}
-                disabled={status !== 'idle' && status !== 'success' && status !== 'error'}
-              />
-              {formErrors.email && (
-                <div style={{ fontSize: 'var(--font-xs)', color: '#ef4444', marginTop: '4px' }}>
-                  {formErrors.email}
-                </div>
-              )}
-            </div>
-
-            {/* Email OTP Verification */}
-            <div className="form-group">
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ width: '100%' }}
-                disabled={!formData.email.trim() || otpLoading || otpVerified || cooldown > 0}
-                onClick={handleSendOtp}
-              >
-                {otpLoading && !otpSent ? (
-                  'Sending OTP...'
-                ) : otpVerified ? (
-                  'Email Verified ✓'
-                ) : cooldown > 0 ? (
-                  `Resend OTP in ${cooldown}s`
-                ) : otpSent ? (
-                  'Resend OTP to Email'
-                ) : (
-                  'Send OTP to Email'
-                )}
-              </button>
-
-              {otpSent && !otpVerified && (
-                <>
-                  <label
-                    className="form-label"
-                    htmlFor="otp"
-                    style={{ marginTop: '12px' }}
-                  >
-                    Enter 6-digit OTP <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-
+              <div className="input-with-button-group">
+                <div className="input-with-icon-group">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="input-leading-icon">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
+                  </svg>
                   <input
-                    className={`form-input ${formErrors.otp ? 'error' : ''}`}
-                    type="text"
-                    id="otp"
-                    name="otp"
-                    placeholder="Enter 6-digit OTP"
-                    value={otp}
-                    maxLength={6}
-                    inputMode="numeric"
-                    disabled={otpLoading}
-                    onChange={(e) =>
-                      setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))
-                    }
+                    id="email"
+                    type="email"
+                    name="email"
+                    className={`input ${formErrors.email ? 'input-error' : ''}`}
+                    placeholder="e.g. sarah.jenkins@company.com or name@gla.ac.in"
+                    value={formData.email}
+                    onChange={handleChange}
+                    disabled={isSubmitting}
                   />
-
+                </div>
+                {formData.email && !otpVerified && (
                   <button
                     type="button"
-                    className="btn btn-primary mt-8"
-                    style={{ width: '100%' }}
-                    disabled={otp.length !== 6 || otpLoading}
-                    onClick={handleVerifyOtp}
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleSendOtp}
+                    disabled={otpLoading || cooldown > 0 || isSubmitting}
+                    style={{ whiteSpace: 'nowrap' }}
                   >
-                    {otpLoading ? 'Verifying...' : 'Verify OTP'}
+                    {otpLoading
+                      ? 'Sending...'
+                      : cooldown > 0
+                      ? `Resend (${cooldown}s)`
+                      : 'Send OTP'}
                   </button>
-                </>
+                )}
+              </div>
+              {formErrors.email ? (
+                <span className="field-error-text">{formErrors.email}</span>
+              ) : (
+                <span className="field-hint-text">
+                  Compulsory verification contact for multi-factor identity authorization and security audit records.
+                </span>
               )}
 
-              {otpMessage && (
-                <p
-                  style={{
-                    fontSize: 'var(--font-xs)',
-                    marginTop: '8px',
-                    color: otpVerified ? '#10b981' : 'var(--text-secondary)',
-                  }}
-                >
-                  {otpMessage}
-                </p>
-              )}
-
-              {formErrors.otp && (
-                <div style={{ fontSize: 'var(--font-xs)', color: '#ef4444', marginTop: '6px' }}>
-                  ⚠️ {formErrors.otp}
+              {/* OTP Input Row */}
+              {otpSent && !otpVerified && (
+                <div className="otp-verification-box mt-12 animate-in">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 'var(--font-xs)', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Enter 6-Digit Email Verification Code:
+                    </span>
+                    {cooldown > 0 && (
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        Expires in {cooldown}s
+                      </span>
+                    )}
+                  </div>
+                  <div className="input-with-button-group">
+                    <input
+                      type="text"
+                      className={`input input-monospace ${formErrors.otp ? 'input-error' : ''}`}
+                      placeholder="000000"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                      disabled={isSubmitting || otpLoading}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={handleVerifyOtp}
+                      disabled={otp.length !== 6 || otpLoading || isSubmitting}
+                      style={{ whiteSpace: 'nowrap' }}
+                    >
+                      {otpLoading ? 'Verifying...' : 'Verify OTP'}
+                    </button>
+                  </div>
+                  {formErrors.otp && <span className="field-error-text">{formErrors.otp}</span>}
+                  {otpMessage && <span className="field-hint-text">{otpMessage}</span>}
                 </div>
               )}
 
               {otpVerified && (
-                <p style={{ color: '#10b981', fontSize: 'var(--font-xs)', marginTop: '6px', fontWeight: 600 }}>
-                  ✓ Email verified successfully
-                </p>
+                <div className="verified-email-badge mt-8 animate-in">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="mini-icon">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Email verified via SMTP OTP</span>
+                </div>
               )}
             </div>
 
-
             {formErrors.file && (
-              <div style={{ padding: '10px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: '6px', color: '#ef4444', fontSize: 'var(--font-xs)', marginBottom: '12px' }}>
-                ⚠️ {formErrors.file}
+              <div className="alert-banner alert-danger mb-16">
+                <span>{formErrors.file}</span>
               </div>
             )}
 
+            {/* Submit Button */}
             <button
               type="submit"
-              className="btn btn-primary btn-lg mt-8"
-              id="register-btn"
-              disabled={status !== 'idle' && status !== 'success' && status !== 'error'}
-              style={{ width: '100%' }}
+              className="btn btn-primary btn-block btn-lg"
+              disabled={isSubmitting}
+              id="submit-enrollment-btn"
             >
-              {status !== 'idle' && status !== 'success' && status !== 'error' ? (
-                <span>Executing Enrollment Pipeline...</span>
+              {isSubmitting ? (
+                <>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="btn-icon spin">
+                    <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 5v4h4" />
+                    <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" />
+                  </svg>
+                  Processing Biometric Embedding Pipeline...
+                </>
               ) : (
                 <>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="btn-icon">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                     <circle cx="9" cy="7" r="4" />
                     <line x1="19" y1="8" x2="19" y2="14" />
                     <line x1="16" y1="11" x2="22" y2="11" />
                   </svg>
-                  Submit & Enroll User
+                  Enroll Biometric Identity
                 </>
               )}
             </button>
           </form>
 
-          {/* Structured API Error Message Box */}
+          {/* Structured Error Message */}
           {apiError && (
-            <div className="mt-16 animate-in" style={{ padding: '14px 16px', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', fontSize: 'var(--font-sm)' }}>
-              <div style={{ fontWeight: 700, marginBottom: '4px' }}>⚠️ Enrollment Failed</div>
-              <p style={{ margin: 0 }}>{apiError}</p>
+            <div className="alert-banner alert-danger mt-16">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="alert-icon">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <div>
+                <strong>Enrollment Failed:</strong>
+                <p style={{ margin: '4px 0 0 0' }}>{apiError}</p>
+              </div>
             </div>
           )}
 
-          {/* Success Summary Box */}
-          {result && status === 'success' && (
-            <div className="mt-16 animate-in" style={{ padding: '16px', borderRadius: '10px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
-              <div style={{ color: '#10b981', fontWeight: 700, fontSize: 'var(--font-md)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                ✓ Biometric Enrollment Complete!
+          {/* Enrollment Success Box */}
+          {enrollmentResult && (
+            <div className="enrollment-success-card mt-16 animate-in">
+              <div className="success-header">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="success-icon">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+                <h4>Biometric Enrollment Completed Successfully</h4>
               </div>
-              <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: 'var(--bg-card)', padding: '12px', borderRadius: '8px' }}>
+
+              <div className="success-details-grid">
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>User ID:</span>
-                  <p style={{ fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace', margin: 0 }}>{result.user_id}</p>
+                  <span className="detail-label">User ID:</span>
+                  <strong className="detail-value monospace-text">{enrollmentResult.user_id}</strong>
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Name:</span>
-                  <p style={{ fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{result.name}</p>
+                  <span className="detail-label">Display Name:</span>
+                  <strong className="detail-value">{enrollmentResult.name}</strong>
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>FAISS Vector ID:</span>
-                  <p style={{ fontWeight: 700, color: '#10b981', fontFamily: 'monospace', margin: 0 }}>#{result.faiss_id}</p>
+                  <span className="detail-label">FAISS Vector Index:</span>
+                  <strong className="detail-value">#{enrollmentResult.faiss_id}</strong>
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-muted)' }}>Liveness Verification:</span>
-                  <p style={{ fontWeight: 700, color: '#10b981', margin: 0 }}>{((result.liveness_score ?? 1) * 100).toFixed(1)}% REAL</p>
+                  <span className="detail-label">Embedding Dimensions:</span>
+                  <strong className="detail-value">512d L2 Normalized</strong>
                 </div>
               </div>
-              <div style={{ marginTop: '10px', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
-                User is immediately active and available for 1:N authentication searches.
+
+              <div className="success-actions-row mt-12">
+                <Link to="/users" className="btn btn-secondary btn-sm">
+                  View in Identity Database →
+                </Link>
+                <Link to="/authenticate" className="btn btn-primary btn-sm">
+                  Verify This Identity →
+                </Link>
               </div>
             </div>
           )}
         </div>
 
-        {/* Right: Face Capture & Multi-Stage Pipeline Progress */}
-        <div>
-          {/* Capture Box Card */}
-          <div className="card mb-24">
-            <div className="card-header" style={{ justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div className="card-icon info">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
-                </div>
-                <span className="card-title">Face Image Capture</span>
-              </div>
-
-              <div style={{ display: 'flex', background: 'var(--bg-secondary)', padding: '3px', borderRadius: '6px', gap: '3px' }}>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${inputMode === 'upload' ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => handleModeChange('upload')}
-                  style={{ padding: '4px 10px', fontSize: '11px' }}
-                >
-                  Upload File
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${inputMode === 'camera' ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => handleModeChange('camera')}
-                  style={{ padding: '4px 10px', fontSize: '11px' }}
-                >
-                  Webcam
-                </button>
-              </div>
+        {/* Right Column: Facial Capture / Photo Selection */}
+        <div className="card">
+          <div className="card-header">
+            <div className="card-header-title-group">
+              <h3 className="card-title">Biometric Facial Sample</h3>
+              <p className="card-subtitle">High-quality, frontal face image required for vector generation</p>
             </div>
 
-            {/* Input Mode: File Upload */}
-            {inputMode === 'upload' && (
-              <div>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/bmp"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  style={{ display: 'none' }}
-                />
+            <div className="tab-pill-group">
+              <button
+                type="button"
+                className={`tab-pill-btn ${inputMode === 'upload' ? 'active' : ''}`}
+                onClick={() => handleModeChange('upload')}
+              >
+                Upload Photo
+              </button>
+              <button
+                type="button"
+                className={`tab-pill-btn ${inputMode === 'camera' ? 'active' : ''}`}
+                onClick={() => handleModeChange('camera')}
+              >
+                Webcam
+              </button>
+            </div>
+          </div>
 
+          {inputMode === 'upload' && (
+            <div className="upload-view-container">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/bmp"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+                id="enroll-file-upload-input"
+              />
+
+              {!previewUrl ? (
                 <div
-                  className="placeholder-area"
-                  style={{
-                    cursor: 'pointer',
-                    border: '2px dashed var(--border-color)',
-                    borderRadius: '12px',
-                    padding: '20px',
-                    textAlign: 'center',
-                    background: 'var(--bg-secondary)',
-                  }}
+                  className="upload-dropzone"
                   onClick={() => fileInputRef.current?.click()}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
                 >
-                  {previewUrl ? (
-                    <div>
-                      <img
-                        src={previewUrl}
-                        alt="Enrollment Face Preview"
-                        style={{ maxHeight: '180px', borderRadius: '8px', objectFit: 'contain', border: '1px solid var(--border-color)' }}
-                      />
-                      <p style={{ marginTop: '6px', fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>
-                        Click to change photo ({selectedFile?.name})
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary)', opacity: 0.7, margin: '0 auto 8px auto' }}>
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="17 8 12 3 7 8" />
-                        <line x1="12" y1="3" x2="12" y2="15" />
-                      </svg>
-                      <p className="placeholder-label" style={{ fontWeight: 600 }}>Select Clear Face Photo</p>
-                      <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        JPEG, PNG, WebP or BMP format with exactly 1 face.
-                      </p>
-                    </>
-                  )}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="dropzone-icon">
+                    <circle cx="12" cy="8" r="4" />
+                    <path d="M6 21v-2a6 6 0 0 1 12 0v2" />
+                  </svg>
+                  <h4>Click to Select Enrollment Photo</h4>
+                  <p>JPEG, PNG, WebP format. Ensure clear frontal illumination and no motion blur.</p>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="preview-viewport">
+                  <img src={previewUrl} alt="Enrollment sample" className="preview-image-element" />
+                  <div className="upload-preview-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      Change Photo
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
-            {/* Input Mode: Live Camera */}
-            {inputMode === 'camera' && (
-              <div style={{ textAlign: 'center' }}>
-                <div
-                  style={{
-                    position: 'relative',
-                    width: '100%',
-                    maxHeight: '220px',
-                    background: '#000',
-                    borderRadius: '8px',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
+          {inputMode === 'camera' && (
+            <div className="camera-view-container">
+              {!previewUrl ? (
+                <div className="video-viewport">
                   <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted
-                    style={{
-                      width: '100%',
-                      maxHeight: '220px',
-                      objectFit: 'cover',
-                      display: cameraActive ? 'block' : 'none',
-                    }}
+                    onLoadedMetadata={(e) => e.currentTarget.play().catch(console.error)}
+                    className="live-video-element"
                   />
-                  <canvas ref={canvasRef} style={{ display: 'none' }} />
+                  {cameraActive && (
+                    <div className="camera-guideline-overlay">
+                      <div className="face-oval-guide" />
+                      <span className="guideline-hint">Position frontal face in oval</span>
+                    </div>
+                  )}
 
-                  {!cameraActive && (
-                    <div style={{ padding: '30px', color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
-                      {cameraError ? <p style={{ color: '#ef4444' }}>{cameraError}</p> : <p>Starting camera...</p>}
+                  {cameraError && (
+                    <div className="camera-error-message">
+                      <p>{cameraError}</p>
                     </div>
                   )}
                 </div>
+              ) : (
+                <div className="preview-viewport">
+                  <img src={previewUrl} alt="Captured enrollment face" className="preview-image-element" />
+                </div>
+              )}
 
-                {cameraActive && (
-                  <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={capturePhoto}>
-                      📷 Capture Photo
-                    </button>
-                    {previewUrl && (
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={handleRetake}>
-                        🔄 Retake
-                      </button>
-                    )}
-                  </div>
-                )}
+              <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-                {previewUrl && inputMode === 'camera' && (
-                  <div style={{ marginTop: '12px', padding: '8px', background: 'var(--bg-secondary)', borderRadius: '6px' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Captured Preview:</span>
-                    <img src={previewUrl} alt="Captured" style={{ maxHeight: '100px', borderRadius: '4px', border: '1px solid var(--border-color)' }} />
-                  </div>
+              <div className="camera-controls-row">
+                {!previewUrl ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={capturePhoto}
+                    disabled={!cameraActive}
+                  >
+                    Capture Enrollment Frame
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={handleRetake}
+                  >
+                    Retake Photo
+                  </button>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Live Step Progress Indicator */}
-          <div className="card">
-            <div style={{ fontSize: 'var(--font-xs)', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '12px', tracking: '0.05em' }}>
-              Enrollment Pipeline Stages
             </div>
+          )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {steps.map((st, idx) => {
-                const isCurrent = idx === activeStep && status !== 'idle' && status !== 'success'
-                const isPassed = idx < activeStep || status === 'success'
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      background: isCurrent
-                        ? 'rgba(59,130,246,0.1)'
-                        : isPassed
-                          ? 'rgba(16,185,129,0.06)'
-                          : 'var(--bg-secondary)',
-                      border: isCurrent
-                        ? '1px solid var(--primary)'
-                        : isPassed
-                          ? '1px solid rgba(16,185,129,0.3)'
-                          : '1px solid transparent',
-                      transition: 'all 0.3s ease',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '24px',
-                        height: '24px',
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        background: isPassed ? '#10b981' : isCurrent ? 'var(--primary)' : 'var(--border-color)',
-                        color: '#fff',
-                      }}
-                    >
-                      {isPassed ? '✓' : idx + 1}
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 'var(--font-xs)', fontWeight: 700, color: isPassed ? '#10b981' : isCurrent ? 'var(--primary)' : 'var(--text-primary)' }}>
-                        {st.label}
-                      </div>
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{st.desc}</div>
-                    </div>
-
-                    {isCurrent && (
-                      <span style={{ fontSize: '10px', color: 'var(--primary)', fontWeight: 600 }}>
-                        Processing...
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+          {/* Quality Guidance Card */}
+          <div className="quality-guidelines-box mt-20">
+            <h5 className="guidelines-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 15, height: 15 }}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              Biometric Enrollment Standards
+            </h5>
+            <ul className="guidelines-checklist">
+              <li className="guidelines-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="guidelines-check-icon">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>Exactly <strong>one face</strong> visible in the capture frame (multiple faces rejected).</span>
+              </li>
+              <li className="guidelines-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="guidelines-check-icon">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>Face crop dimension must exceed <strong>40 × 40 pixels</strong> for feature extraction.</span>
+              </li>
+              <li className="guidelines-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="guidelines-check-icon">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>Minimal motion blur (Laplacian focus variance validated by backend).</span>
+              </li>
+              <li className="guidelines-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="guidelines-check-icon">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>Direct frontal orientation with unobstructed eyes, nose, and mouth.</span>
+              </li>
+            </ul>
           </div>
         </div>
       </div>

@@ -11,15 +11,16 @@
  * - Defaults to http://localhost:8000.
  */
 export const getApiBaseUrl = () => {
-  if (import.meta.env?.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '')
-  }
   if (typeof window !== 'undefined' && window.location?.hostname) {
     const protocol = window.location.protocol || 'http:'
     const host = window.location.hostname
+    // If accessing from a mobile device or other machine on the LAN, prioritize the actual host
     if (host !== 'localhost' && host !== '127.0.0.1') {
       return `${protocol}//${host}:8000`
     }
+  }
+  if (import.meta.env?.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '')
   }
   return 'http://localhost:8000'
 }
@@ -394,6 +395,26 @@ export async function verifyOtp(email, otp) {
   }
 }
 
+/**
+ * Lightweight health check endpoint.
+ * GET /health
+ */
+export async function checkBackendHealth() {
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 4000)
+    const res = await fetch(`${API_BASE_URL}/health`, { signal: controller.signal })
+    clearTimeout(timeoutId)
+    if (!res.ok) {
+      return { online: false, error: `HTTP ${res.status}` }
+    }
+    const data = await res.json()
+    return { online: true, ...data }
+  } catch (error) {
+    return { online: false, error: error.message || 'Backend unreachable' }
+  }
+}
+
 export default {
   registerUser,
   recognizeFace,
@@ -412,6 +433,7 @@ export default {
   updateThresholds,
   sendOtp,
   verifyOtp,
+  checkBackendHealth,
 }
 
 
