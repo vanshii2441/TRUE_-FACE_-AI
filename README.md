@@ -2,7 +2,7 @@
 
 ### Enterprise-Grade Facial Recognition & Anti-Spoofing Platform
 
-A face-recognition security platform designed to support identity verification, biometric matching, and presentation-attack detection through facial liveness analysis.
+A facial recognition and security platform designed to support biometric identity verification, facial liveness detection, and CNN-based deepfake detection.
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" />
@@ -14,67 +14,128 @@ A face-recognition security platform designed to support identity verification, 
 
 ## 📌 Overview
 
-TRUE FACE AI aims to provide a secure facial recognition and anti-spoofing solution by combining face-based identity verification with liveness detection.
+TRUE FACE AI is an intelligent security platform combining facial recognition, liveness analysis, and deep-learning-based detection techniques.
 
-The platform is being developed with a modular architecture, connecting a React-based frontend with a Python backend and machine-learning components.
-
-The project focuses on identifying registered individuals, detecting potential spoofing attempts, and providing an interface for monitoring identity verification activity.
+The application is built around a React frontend, Python backend, and machine-learning components. Its goal is to support identity enrollment, camera-based verification, spoof detection, and security monitoring through a modular architecture.
 
 ## ✨ Key Features
 
-- **Facial Recognition:** Designed for matching facial identities against registered users.
-- **Anti-Spoofing:** Supports facial liveness analysis to help distinguish real faces from presentation attacks.
-- **Live Camera Interface:** Includes a face-positioning guide and capture preview to assist users during camera-based verification.
-- **Registered Users:** Provides an identity database interface for viewing enrolled users and related information.
-- **Security Dashboard:** Includes analytics and system-health information for monitoring platform activity.
-- **Modular Architecture:** Separates frontend, backend, and machine-learning components for easier development and maintenance.
+### 🏠 Home & Landing Page
+- Interactive landing page introducing the platform.
+- Feature cards and navigation to the main modules.
+- Clear calls to action for accessing verification features.
 
-## 🧠 Machine Learning & CNN Development
+### 📷 Live Camera & Face Positioning
+- Live camera interface for facial verification.
+- Oval face-positioning guide to help align the face.
+- Capture preview before proceeding with verification.
 
-The project includes a CNN-based liveness-detection component intended to classify facial inputs as real or spoof.
+### 👥 Registered Users — Identity Database
+- Interface for viewing registered identities.
+- User cards and identity information.
+- Empty-state interface when no identities are enrolled.
+- Integration with the existing user-management API.
 
-The existing model implementation uses a 128 × 128 input size and two output classes:
+### 📊 Security Dashboard
+- Dashboard analytics and system-health information.
+- Security activity indicators.
+- Scroll navigation to the analytics section.
 
-| Class | Meaning |
+### 🛡️ Facial Liveness Detection
+- Existing PyTorch CNN liveness model.
+- Image preprocessing and model inference.
+- Real-face versus spoof classification.
+- Threshold-based presentation-attack detection.
+
+### 🔍 CNN-Based Deepfake Detection
+- CNN-based deepfake detection development.
+- PyTorch model architecture and inference workflow.
+- Training and evaluation workflow.
+- Planned integration with the broader verification pipeline.
+
+### 🔐 Facial Recognition
+- Designed to match facial inputs against registered identities.
+- Supports the intended biometric verification workflow.
+
+*Feature availability depends on the current implementation and integration status. Planned functionality should not be considered production-ready.*
+
+## 🧠 Deep Learning Architecture
+
+### 1. Facial Liveness Detection
+
+The existing liveness implementation includes:
+
+- `liveness_net.py` — CNN model architecture.
+- `liveness_detector.py` — model loading, preprocessing, inference, and threshold-based decisions.
+- `train_liveness.py` — model training and evaluation workflow.
+
+The liveness model uses a **128 × 128 pixel** input size and two output classes:
+
+| Class | Description |
 |---|---|
 | `0` | Real face |
 | `1` | Spoof face |
 
-The liveness pipeline includes image preprocessing, model loading, prediction, and threshold-based decision-making.
+The detector converts the image into the expected color format, resizes and normalizes it, and uses the model output to determine whether the input meets the configured liveness threshold.
 
-**Current development focus:** CNN model validation, training and evaluation, and reliable integration with the existing authentication workflow.
+### 2. CNN-Based Deepfake Detection
 
-Model performance must be measured using appropriate evaluation metrics and representative test data before the CNN component can be considered complete.
+TRUE FACE AI uses a **PyTorch CNN (DeepfakeNet)** as the intended deepfake detection model, replacing the earlier Vision Transformer (ViT) description.
+
+The deepfake detection workflow is designed to include:
+
+1. Dataset preparation and image preprocessing.
+2. CNN model training.
+3. Evaluation using suitable test data and classification metrics.
+4. Loading trained model weights for inference.
+5. Integration of detection results into the security workflow.
+
+Model training, evaluation, and end-to-end integration should be marked complete only after they have been verified against the current source code.
+
+## 🧪 Testing & Validation
+
+**Backend test result: PASSED (86/86)**
+
+The reported backend test run includes:
+
+- **Tests passed:** 86/86
+- **Warnings:** 1
+
+The test count refers to the reported backend test suite. It does not represent model accuracy or independently establish that all CNN, deepfake detection, and end-to-end workflows have been validated.
+
+Testing should cover API behavior, authentication, liveness decisions, model loading, error handling, and frontend-backend integration.
 
 ## 🏗️ Technology Stack
 
 | Component | Technology |
 |---|---|
-| Frontend | React, JavaScript, HTML, CSS |
+| Frontend | React, JavaScript, HTML5, CSS3 |
 | Backend | Python |
-| Machine Learning | PyTorch, CNN |
+| Deep Learning | PyTorch, CNN |
 | Computer Vision | OpenCV |
-| Data Management | Existing backend data layer; database integration maintained separately |
-| Development Tools | Git, GitHub, npm, Python virtual environments |
-
-*The stack reflects the project's current implementation and development direction; individual components may evolve during integration.*
+| API Communication | Frontend service layer and backend APIs |
+| Version Control | Git and GitHub |
 
 ## 📂 Project Structure
 
 ```text
-TRUE-FACE-AI/
-├── secureface-ai/          # React frontend
+TRUE-FACE-AI-GIT/
+├── secureface-ai/
 │   └── src/
-│       ├── pages/           # Application pages
-│       ├── components/      # Reusable UI components
-│       └── services/        # API communication
-├── backend/                # Python backend
-├── models/                 # Machine-learning models
-├── data/                   # Model training and evaluation data
-└── README.md               # Project documentation
+│       ├── pages/
+│       ├── components/
+│       └── services/
+├── backend/
+│   ├── liveness_net.py
+│   ├── liveness_detector.py
+│   └── train_liveness.py
+├── models/
+├── data/
+├── README.md
+└── LICENSE
 ```
 
-*Exact folders and filenames may vary with the current repository structure.*
+*This is an illustrative structure. Preserve the actual folder locations in your repository and include the deepfake model files at their real paths.*
 
 ## 🚀 Getting Started
 
@@ -84,16 +145,14 @@ TRUE-FACE-AI/
 - Node.js and npm
 - Git
 
-### 1. Clone the repository
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/vanshii2441/TRUE_-FACE_-AI.git
 cd TRUE_-FACE_-AI
 ```
 
-### 2. Start the frontend
-
-Open a terminal in the frontend directory:
+### 2. Start the Frontend
 
 ```bash
 cd secureface-ai
@@ -101,11 +160,11 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite in your terminal.
+Open the local URL displayed by Vite.
 
-### 3. Start the backend
+### 3. Start the Backend
 
-Open a separate terminal in the backend directory:
+Open a separate terminal and navigate to the backend directory:
 
 ```bash
 cd backend
@@ -114,47 +173,48 @@ python -m venv venv
 
 Activate the virtual environment on Windows:
 
-```bash
+```cmd
 venv\Scripts\activate
 ```
 
-Install the dependencies listed in the backend's `requirements.txt`, if present:
+Install the dependencies using the backend's actual requirements file:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Start the backend using the repository's actual application entry point and configuration.
+Start the backend using the application's configured entry point.
 
-**Note:** The backend startup command, environment variables, and dependency installation instructions should match the files currently present in the repository.
+Ensure that required environment variables, dependencies, model weights, and backend configuration are set before running the application.
 
-## 📊 Development Status
+## 📈 Development Status
 
 | Module | Status |
 |---|---|
 | Home / Landing Page | Implemented |
 | Registered Users Interface | Implemented |
-| Dashboard Analytics Interface | Implemented |
+| Dashboard Analytics UI | Implemented |
 | Live Camera Positioning Guide | Implemented |
 | Capture Preview | Implemented |
-| CNN Liveness Model | Existing implementation; further development and validation pending |
-| CNN Training and Evaluation | Pending validation |
-| End-to-End CNN Integration | Pending |
-| Audit Log | Planned |
-| Deepfake Detection | Planned |
-| Final Pipeline Testing | Planned |
+| Liveness CNN | Existing implementation |
+| CNN Training & Evaluation | Further validation required |
+| CNN-Based Deepfake Detection | Implementation and integration to be verified |
+| Facial Recognition Integration | Pending verification |
+| Security Audit Log | Planned |
+| End-to-End Pipeline Testing | Ongoing |
 
-*Status refers to the development work tracked for this project and should be updated as each feature is verified.*
+Update the status of each module when the corresponding work has been implemented and verified.
 
-## 🔐 Security Considerations
+## 🔒 Security Considerations
 
-- Protect biometric information and restrict access to authorized users.
-- Store credentials and API secrets in environment variables rather than committing them to source control.
-- Validate input and handle camera, model-loading, and backend errors safely.
-- Evaluate false acceptance and false rejection rates before relying on the system for real-world identity verification.
-- Treat liveness detection as a security layer, not a guarantee against every possible spoofing attack.
+- Protect biometric data and restrict access to authorized users.
+- Store secrets and credentials in environment variables.
+- Validate inputs and handle camera, API, and model-loading failures safely.
+- Evaluate false acceptance and false rejection rates.
+- Test liveness and deepfake detection against representative datasets.
+- Do not treat model predictions as a guarantee against every spoofing or manipulation attack.
 
-## 👥 Project Team
+## 👩‍💻 Project Team
 
 Developed collaboratively by:
 
@@ -170,5 +230,5 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 <p align="center">
   <strong>TRUE FACE AI</strong><br />
-  Intelligent Identity Verification · Facial Liveness · Security Analytics
+  Intelligent Identity Verification · CNN-Based Detection · Security Analytics
 </p>
