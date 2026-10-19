@@ -7,6 +7,10 @@ function Authenticate() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [captured, setCaptured] = useState(false)
+  const [lightingStatus, setLightingStatus] = useState({
+    tone: 'neutral',
+    message: 'Checking lighting...',
+  })
 
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
@@ -19,6 +23,7 @@ function Authenticate() {
 
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
+  const lightingCanvasRef = useRef(null)
   const fileInputRef = useRef(null)
   const streamRef = useRef(null)
 
@@ -81,6 +86,63 @@ function Authenticate() {
       stopCamera()
     }
   }, [inputMode, stopCamera])
+
+  useEffect(() => {
+    if (!cameraActive || captured) return
+
+    const video = videoRef.current
+    const canvas = lightingCanvasRef.current
+    if (!video || !canvas) return
+
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    if (!context) return
+
+    const intervalId = window.setInterval(() => {
+      if (video.readyState < 2 || !video.videoWidth) return
+
+      canvas.width = 32
+      canvas.height = 24
+      context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+      let totalBrightness = 0
+      let pixels
+
+      try {
+        pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+
+        for (let i = 0; i < pixels.length; i += 4) {
+          totalBrightness +=
+            0.2126 * pixels[i] +
+            0.7152 * pixels[i + 1] +
+            0.0722 * pixels[i + 2]
+        }
+      } catch (err) {
+        console.warn('Could not sample camera lighting:', err)
+        return
+      }
+
+      const averageBrightness = totalBrightness / (pixels.length / 4)
+
+      if (averageBrightness < 65) {
+        setLightingStatus({
+          tone: 'warning',
+          message: 'Low lighting — move to a brighter area',
+        })
+      } else if (averageBrightness > 210) {
+        setLightingStatus({
+          tone: 'warning',
+          message: 'Excessive brightness — avoid strong light',
+        })
+      } else {
+        setLightingStatus({
+          tone: 'good',
+          message: 'Lighting looks suitable',
+        })
+      }
+    }, 1000)
+
+    return () => window.clearInterval(intervalId)
+  }, [cameraActive, captured])
 
   const handleModeChange = (mode) => {
     setInputMode(mode)
@@ -317,6 +379,17 @@ function Authenticate() {
                     </div>
                   )}
 
+                  {cameraActive && !captured && (
+                    <div
+                      className={`lighting-status lighting-status-${lightingStatus.tone}`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <span className="lighting-status-dot" />
+                      {lightingStatus.message}
+                    </div>
+                  )}
+
                   {cameraError && (
                     <div className="camera-error-message">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="alert-icon">
@@ -338,6 +411,7 @@ function Authenticate() {
               )}
 
               <canvas ref={canvasRef} style={{ display: 'none' }} />
+              <canvas ref={lightingCanvasRef} style={{ display: 'none' }} />
 
               <div className="camera-controls-row">
                 {!captured ? (

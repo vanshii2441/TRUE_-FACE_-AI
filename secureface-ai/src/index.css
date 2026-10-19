@@ -5732,4 +5732,66 @@ ul, ol {
 .mt-12 { margin-top: 12px; }
 .mt-16 { margin-top: 16px; }
 .mt-20 { margin-top: 20px; }
-.ml-auto { margin-left: auto; }
+.ml-auto { margin-left: auto; }
+
+.lighting-status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: auto;
+  z-index: 20;
+  width: fit-content;
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+/* Lighting status message */
+.lighting-status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: auto;
+  z-index: 20;
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+}
+
+/* Green: lighting is good */
+.lighting-status-good {
+  color: #22c55e;
+  background: rgba(20, 83, 45, 0.25);
+}
+
+/* Yellow: lighting is too low */
+.lighting-status-warning {
+  color: #facc15;
+  background: rgba(113, 63, 18, 0.25);
+}
+
+/* Red: lighting is excessive */
+.lighting-status-neutral {
+  color: #ef4444;
+  background: rgba(127, 29, 29, 0.25);
+}
+
+.lighting-status-dot {
+  width: 9px;
+  height: 9px;
+  min-width: 9px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}

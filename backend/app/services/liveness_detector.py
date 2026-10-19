@@ -141,8 +141,14 @@ class LivenessDetector:
         # Resize to input_size x input_size
         resized = cv2.resize(face_rgb, (self.input_size, self.input_size), interpolation=cv2.INTER_AREA)
 
-        # Normalize to [0.0, 1.0] and rearrange dimensions to (3, H, W)
+        
+        # Convert to tensor and scale pixels to [0.0, 1.0]
         tensor = torch.from_numpy(resized).permute(2, 0, 1).float() / 255.0
+
+        # Apply the same ImageNet normalization used during validation
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+        tensor = (tensor - mean) / std
 
         # Add batch dimension -> (1, 3, H, W)
         tensor = tensor.unsqueeze(0)
