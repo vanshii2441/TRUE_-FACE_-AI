@@ -7,6 +7,7 @@ AI-generated, manipulated, or synthetic faces.
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Optional
 
 import cv2
@@ -32,6 +33,7 @@ class DeepfakeDetector:
     or AI-generated / manipulated (DEEPFAKE).
     """
 
+    
     def __init__(
         self,
         model_path: Optional[str] = None,
@@ -39,19 +41,38 @@ class DeepfakeDetector:
         input_size: Optional[int] = None,
         device: Optional[str] = None,
     ) -> None:
-        self.model_path = model_path if model_path is not None else settings.deepfake_model_path
-        self.threshold = threshold if threshold is not None else settings.deepfake_threshold
-        self.input_size = input_size if input_size is not None else settings.deepfake_input_size
+        configured_model_path = (
+            model_path
+            if model_path is not None
+            else settings.deepfake_model_path
+        )
+        configured_path = Path(configured_model_path)
+
+        if not configured_path.is_absolute():
+            # Resolve relative paths from the repository root.
+            repository_root = Path(__file__).resolve().parents[3]
+            configured_path = repository_root / configured_path
+
+        self.model_path = str(configured_path.resolve())
+        self.threshold = (
+            threshold if threshold is not None else settings.deepfake_threshold
+        )
+        self.input_size = (
+            input_size if input_size is not None else settings.deepfake_input_size
+        )
 
         if device:
             self.device = torch.device(device)
         else:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.device = torch.device(
+                "cuda" if torch.cuda.is_available() else "cpu"
+            )
 
         logger.info("Initializing DeepfakeDetector on device: %s", self.device)
         self.model = DeepfakeNet(num_classes=2).to(self.device)
         self.is_weights_loaded = False
         self.load_weights()
+
 
     @property
     def is_loaded(self) -> bool:

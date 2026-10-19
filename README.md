@@ -1,212 +1,99 @@
-<div align="center">
-
 # 🛡️ TRUE FACE AI
 
 ### Enterprise-Grade Facial Recognition & Anti-Spoofing Platform
 
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9+-green.svg)](https://python.org)
-[![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen.svg)]()
+A face-recognition security platform designed to support identity verification, biometric matching, and presentation-attack detection through facial liveness analysis.
 
-*High-speed 1:N biometric searching with multi-layered liveness detection — authenticating real users across multi-million user databases while blocking physical and digital spoofing in real time.*
-
-</div>
-
----
-
-## 📋 Table of Contents
-
-- [Current Implementation Status](#-current-implementation-status)
-- [Problem Statement](#-problem-statement)
-- [Core Solution](#-core-solution)
-- [Key Objectives](#-key-objectives)
-- [Architecture Overview](#-architecture-overview)
-- [Getting Started](#-getting-started)
-- [API Documentation](#-api-documentation)
-- [Expected Business Impact](#-expected-business-impact)
-- [Tech Stack](#-tech-stack)
-- [Contributing](#-contributing)
-- [License](#-license)
+<p align="center">
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" />
+  <img src="https://img.shields.io/badge/Python-3.9%2B-green.svg" alt="Python 3.9+" />
+  <img src="https://img.shields.io/badge/Status-Active%20Development-orange.svg" alt="Active Development" />
+</p>
 
 ---
 
-## 🚦 Current Implementation Status
+## 📌 Overview
 
-| Module | Status | Details |
-|--------|--------|---------|
-| **React Verification Dashboard** | ✅ IMPLEMENTED | Vite + React 18 UI with live camera/webcam capture, file upload, multi-stage state progress, and explainable decision cards |
-| **FastAPI Backend** | ✅ IMPLEMENTED | Python backend with CORS, lifespan model preloading, and structured JSON error responses |
-| **Face Quality & Blur Check** | ✅ IMPLEMENTED | OpenCV Laplacian variance sharpness check, face crop resolution, and brightness lighting evaluation |
-| **Face Detection (MTCNN)** | ✅ IMPLEMENTED | MTCNN multi-face detection, bounding box localization, confidence scoring, and face cropping |
-| **Liveness Detection (CNN)** | ✅ IMPLEMENTED | PyTorch `LivenessNet` passive anti-spoofing gating, score calculation, and presentation attack prevention |
-| **Deepfake Detection (CNN)** | ✅ IMPLEMENTED | PyTorch `DeepfakeNet` synthetic face analysis layer gating AI face-swap & GAN generated media |
-| **Face Embedding (ArcFace)** | ✅ IMPLEMENTED | InceptionResnetV1 512-dimensional L2-normalized feature vector extraction |
-| **FAISS 1:N Search Engine** | ✅ IMPLEMENTED | FAISS `IndexFlatIP` vector index with persistent metadata storage for sub-millisecond identity search |
-| **Centralized Decision Engine** | ✅ IMPLEMENTED | `AuthenticationDecisionEngine` combining all pipeline metrics into audit-ready, explainable decisions |
-| **End-to-End 7-Stage Pipeline** | ✅ IMPLEMENTED | Input Image/Camera → Detection → Quality → Liveness → Deepfake → Embedding → FAISS 1:N → Decision Engine |
-| **Comprehensive Test Suite** | ✅ PASSED (48/48) | 48 unit & integration tests covering decision engine, quality check, liveness, deepfake, vector store, and API endpoints |
-| **Sub-500ms Execution** | ✅ VERIFIED | Complete 7-stage end-to-end verification executed in ~80-160ms with early-exit optimization |
+TRUE FACE AI aims to provide a secure facial recognition and anti-spoofing solution by combining face-based identity verification with liveness detection.
 
-> **Note:** Only features marked ✅ are actually implemented and tested in this codebase.
+The platform is being developed with a modular architecture, connecting a React-based frontend with a Python backend and machine-learning components.
 
----
+The project focuses on identifying registered individuals, detecting potential spoofing attempts, and providing an interface for monitoring identity verification activity.
 
-## 🔍 Problem Statement
+## ✨ Key Features
 
-Modern access control systems, banking infrastructure, and digital identity platforms are increasingly vulnerable to sophisticated biometric fraud, deepfake attacks, and scalability bottlenecks.
+- **Facial Recognition:** Designed for matching facial identities against registered users.
+- **Anti-Spoofing:** Supports facial liveness analysis to help distinguish real faces from presentation attacks.
+- **Live Camera Interface:** Includes a face-positioning guide and capture preview to assist users during camera-based verification.
+- **Registered Users:** Provides an identity database interface for viewing enrolled users and related information.
+- **Security Dashboard:** Includes analytics and system-health information for monitoring platform activity.
+- **Modular Architecture:** Separates frontend, backend, and machine-learning components for easier development and maintenance.
 
-| Challenge | Description |
-|-----------|-------------|
-| **🎭 Presentation & Deepfake Attacks** | Traditional face recognition models can be easily tricked by printed photos, digital video replays, 3D silicone masks, or generative AI deepfakes — exposing financial systems and secure facilities to severe security breaches. |
-| **⏱️ Large-Scale Latency & Accuracy Trade-Offs** | Searching and matching a single face against millions of enrolled user profiles in real time often leads to high latency or high false-positive rates using standard database architectures. |
-| **🌦️ Environmental & Hardware Instability** | Harsh lighting conditions, low-resolution cameras, off-angle facial positions, and aging features frequently cause authentications to fail for legitimate users. |
+## 🧠 Machine Learning & CNN Development
 
----
+The project includes a CNN-based liveness-detection component intended to classify facial inputs as real or spoof.
 
-## 🧠 Core Solution
+The existing model implementation uses a 128 × 128 input size and two output classes:
 
-An **enterprise-grade facial recognition and anti-spoofing platform** that combines high-speed **1:N biometric searching** with **multi-layered liveness detection**.
+| Class | Meaning |
+|---|---|
+| `0` | Real face |
+| `1` | Spoof face |
 
-By integrating:
-- **Deep Feature Embeddings** — for robust facial representation
-- **CNN-based Liveness Verification** — passive anti-spoofing analysis
-- **Vision Transformer (ViT) Deepfake Detection** — synthetic media identification
+The liveness pipeline includes image preprocessing, model loading, prediction, and threshold-based decision-making.
 
-The system instantly authenticates real users across multi-million user databases while blocking physical and digital spoofing attempts in real time.
+**Current development focus:** CNN model validation, training and evaluation, and reliable integration with the existing authentication workflow.
 
----
+Model performance must be measured using appropriate evaluation metrics and representative test data before the CNN component can be considered complete.
 
-## 🎯 Key Objectives
+## 🏗️ Technology Stack
 
-### 1. Deliver High-Speed Biometric Matching
-> Utilize deep facial embeddings to enable ultra-fast, highly accurate **1:N identity searching** across databases containing **millions of records**.
+| Component | Technology |
+|---|---|
+| Frontend | React, JavaScript, HTML, CSS |
+| Backend | Python |
+| Machine Learning | PyTorch, CNN |
+| Computer Vision | OpenCV |
+| Data Management | Existing backend data layer; database integration maintained separately |
+| Development Tools | Git, GitHub, npm, Python virtual environments |
 
-### 2. Prevent Multi-Modal Spoofing & Deepfakes
-> Combine CNN-based passive liveness analysis and Vision Transformers to instantly detect **physical spoofs** (photos, screens, 3D masks) and **synthetic digital media** (AI deepfakes).
+*The stack reflects the project's current implementation and development direction; individual components may evolve during integration.*
 
-### 3. Ensure Environmental Resilience
-> Maintain low **False Acceptance Rates (FAR)** and **False Rejection Rates (FRR)** under poor lighting, varied camera angles, and partial facial occlusions.
+## 📂 Project Structure
 
-### 4. Enable Sub-Second Processing
-> Execute complete facial capture, liveness verification, vector database matching, and access approval in **under 500 milliseconds**.
-
-### 5. Support Enterprise Integration
-> Provide flexible **APIs and SDKs** to integrate into:
-> - 🏧 Cardless ATMs
-> - 🚪 Physical security turnstiles
-> - 📱 Mobile banking applications
-> - 🔐 Multi-factor authentication (MFA) pipelines
-
----
-
-## 🏗️ Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        TRUE FACE AI                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐    │
-│  │  Face Capture │──▶│  Liveness    │──▶│  Deepfake        │    │
-│  │  & Detection  │   │  Detection   │   │  Detection (ViT) │    │
-│  │  ✅ DONE      │   │  (CNN)       │   │                  │    │
-│  └──────────────┘   └──────────────┘   └────────┬─────────┘    │
-│                                                  │              │
-│                                                  ▼              │
-│  ┌──────────────┐   ┌──────────────┐   ┌──────────────────┐    │
-│  │  Access      │◀──│  1:N Vector  │◀──│  Deep Feature    │    │
-│  │  Decision    │   │  Search      │   │  Embedding       │    │
-│  │  Engine      │   │  (FAISS)     │   │  Extraction      │    │
-│  └──────────────┘   └──────────────┘   └──────────────────┘    │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  APIs & SDKs  │  Admin Dashboard  │  Monitoring & Analytics    │
-└─────────────────────────────────────────────────────────────────┘
+```text
+TRUE-FACE-AI/
+├── secureface-ai/          # React frontend
+│   └── src/
+│       ├── pages/           # Application pages
+│       ├── components/      # Reusable UI components
+│       └── services/        # API communication
+├── backend/                # Python backend
+├── models/                 # Machine-learning models
+├── data/                   # Model training and evaluation data
+└── README.md               # Project documentation
 ```
 
----
+*Exact folders and filenames may vary with the current repository structure.*
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Python 3.9+
-- Node.js 18+ (for the frontend)
-- CUDA-compatible GPU (recommended, not required)
+- Python 3.9 or later
+- Node.js and npm
+- Git
 
-### Backend Setup
+### 1. Clone the repository
 
 ```bash
-# Clone the repository
 git clone https://github.com/vanshii2441/TRUE_-FACE_-AI.git
 cd TRUE_-FACE_-AI
-
-# Create virtual environment
-cd backend
-python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # macOS/Linux
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy environment config (optional — defaults work out of the box)
-copy .env.example .env
 ```
 
-### Run the Face Detection API
+### 2. Start the frontend
 
-```bash
-cd backend
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-
-The API will be available at:
-- **Swagger UI**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
-- **Face Detection**: `POST http://localhost:8000/api/v1/detect-face`
-
-### Test the API with curl
-
-```bash
-# Detect faces in an image
-curl -X POST http://localhost:8000/api/v1/detect-face \
-  -F "file=@path/to/photo.jpg"
-```
-
-Example response:
-```json
-{
-  "success": true,
-  "faces_detected": 1,
-  "faces": [
-    {
-      "bbox": [120, 85, 320, 340],
-      "confidence": 0.9987
-    }
-  ],
-  "image_width": 640,
-  "image_height": 480
-}
-```
-
-### Run the CLI Demo
-
-```bash
-cd backend
-python test_face_detection_demo.py --image path/to/photo.jpg
-```
-
-This will detect faces and save an annotated image with bounding boxes.
-
-### Run Tests
-
-```bash
-cd backend
-pytest tests/ -v
-```
-
-### Frontend Setup
+Open a terminal in the frontend directory:
 
 ```bash
 cd secureface-ai
@@ -214,198 +101,74 @@ npm install
 npm run dev
 ```
 
-The React dashboard will be available at http://localhost:5173.
+Open the local URL printed by Vite in your terminal.
 
----
+### 3. Start the backend
 
-## 📡 API Documentation
+Open a separate terminal in the backend directory:
 
-### `POST /api/v1/detect-face`
-
-Detect faces in an uploaded image.
-
-**Request:** `multipart/form-data` with a `file` field containing the image.
-
-**Accepted formats:** JPEG, PNG, BMP, WebP
-
-**Response (200):**
-```json
-{
-  "success": true,
-  "faces_detected": 1,
-  "faces": [
-    {
-      "bbox": [x1, y1, x2, y2],
-      "confidence": 0.98
-    }
-  ],
-  "image_width": 640,
-  "image_height": 480
-}
+```bash
+cd backend
+python -m venv venv
 ```
 
-**Error Response (400):**
-```json
-{
-  "detail": {
-    "success": false,
-    "error": "Image validation failed",
-    "detail": "Failed to decode image..."
-  }
-}
+Activate the virtual environment on Windows:
+
+```bash
+venv\Scripts\activate
 ```
 
-### `POST /api/v1/enroll`
+Install the dependencies listed in the backend's `requirements.txt`, if present:
 
-Enroll a new face identity into the FAISS vector database.
-
-**Request:** `multipart/form-data`
-- `file`: Image file containing a clear face.
-- `user_id`: Unique user string ID (e.g. `USR001`).
-- `name`: User full name (e.g. `Jane Doe`).
-
-**Response (201):**
-```json
-{
-  "user_id": "USR001",
-  "name": "Jane Doe",
-  "faiss_id": 0,
-  "status": "SUCCESS",
-  "timing_ms": {
-    "detection_ms": 45.2,
-    "embedding_ms": 32.1,
-    "total_ms": 78.5
-  }
-}
+```bash
+pip install -r requirements.txt
 ```
 
-### `POST /api/v1/recognize`
+Start the backend using the repository's actual application entry point and configuration.
 
-Execute complete 6-stage face verification pipeline:
-`Image/Camera → Face Detection → Liveness Detection → Deepfake Detection → Face Embedding → FAISS 1:N Recognition → Final Authentication Result`
+**Note:** The backend startup command, environment variables, and dependency installation instructions should match the files currently present in the repository.
 
-**Request:** `multipart/form-data` with `file` field containing query image.
+## 📊 Development Status
 
-**Response (200 - Authenticated):**
-```json
-{
-  "identity": "Jane Doe",
-  "similarity_score": 0.8942,
-  "liveness_score": 0.985,
-  "deepfake_probability": 0.032,
-  "final_decision": "AUTHENTICATED",
-  "total_processing_time": 75.1,
-  "status": "AUTHENTICATED",
-  "is_authenticated": true,
-  "matched_user": {
-    "user_id": "USR001",
-    "name": "Jane Doe",
-    "similarity": 0.8942,
-    "faiss_id": 0,
-    "is_match": true
-  },
-  "best_similarity": 0.8942,
-  "threshold": 0.60,
-  "is_live": true,
-  "liveness_status": "REAL",
-  "is_deepfake": false,
-  "deepfake_status": "REAL",
-  "detected_faces_count": 1,
-  "timing_ms": {
-    "detection_ms": 42.0,
-    "liveness_ms": 12.4,
-    "deepfake_ms": 10.2,
-    "embedding_ms": 31.5,
-    "search_ms": 1.2,
-    "total_ms": 75.1
-  }
-}
-```
+| Module | Status |
+|---|---|
+| Home / Landing Page | Implemented |
+| Registered Users Interface | Implemented |
+| Dashboard Analytics Interface | Implemented |
+| Live Camera Positioning Guide | Implemented |
+| Capture Preview | Implemented |
+| CNN Liveness Model | Existing implementation; further development and validation pending |
+| CNN Training and Evaluation | Pending validation |
+| End-to-End CNN Integration | Pending |
+| Audit Log | Planned |
+| Deepfake Detection | Planned |
+| Final Pipeline Testing | Planned |
 
-**Pipeline Decision Codes (`final_decision`):**
-- `AUTHENTICATED`: Valid face, passed liveness & deepfake checks, similarity >= threshold match.
-- `UNKNOWN_USER`: Valid face, passed liveness & deepfake checks, similarity < threshold match.
-- `LIVENESS_FAILED`: Passive anti-spoofing gating failed (presentation attack detected).
-- `DEEPFAKE_SUSPECTED`: Deepfake probability exceeded threshold (synthetic face detected).
-- `NO_FACE`: Zero human faces located in uploaded image.
-- `LOW_CONFIDENCE`: Face detection confidence below threshold or multiple faces present.
-- `SYSTEM_ERROR`: System error encountered during processing.
+*Status refers to the development work tracked for this project and should be updated as each feature is verified.*
 
-> **Model Weights Note:** Deepfake Detection model weights path is configurable via `DEEPFAKE_MODEL_PATH` (default `models/deepfake/best_model.pth`). If checkpoint file is not present, `DeepfakeDetector` operates in initialized architecture evaluation mode and logs a notice. Place custom trained weights at the configured path for production evaluation.
+## 🔐 Security Considerations
 
-### `GET /api/v1/users`
-List all currently enrolled face profiles and vector database statistics.
+- Protect biometric information and restrict access to authorized users.
+- Store credentials and API secrets in environment variables rather than committing them to source control.
+- Validate input and handle camera, model-loading, and backend errors safely.
+- Evaluate false acceptance and false rejection rates before relying on the system for real-world identity verification.
+- Treat liveness detection as a security layer, not a guarantee against every possible spoofing attack.
 
-### `DELETE /api/v1/users/reset`
-Reset and clear the entire FAISS vector database and user registry.
+## 👥 Project Team
 
-### `GET /health`
-Returns system health status and total number of enrolled faces.
+Developed collaboratively by:
 
-### `GET /`
-Returns API info and available endpoints.
+- **Mahi Srivastava**
+- **Vanshika Agrawal**
+- **Vaishnavi Singh Rajpoot**
+
+## 📜 License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 ---
 
-## 📈 Expected Business Impact
-
-<table>
-  <tr>
-    <td align="center">🔒<br><b>Near-Zero Biometric Fraud</b></td>
-    <td>Eliminates identity theft and unauthorized access caused by stolen photos, video replays, and AI-generated deepfakes.</td>
-  </tr>
-  <tr>
-    <td align="center">💳<br><b>Frictionless Cardless Transactions</b></td>
-    <td>Enables fast, secure, cardless/passwordless user authentication for banking ATMs, corporate doors, and transit gates.</td>
-  </tr>
-  <tr>
-    <td align="center">⚡<br><b>Sub-Second Throughput</b></td>
-    <td>Reduces authentication processing times down to <b>&lt; 500ms</b>, eliminating queues at high-traffic security checkpoints.</td>
-  </tr>
-  <tr>
-    <td align="center">🏢<br><b>Massive Enterprise Scalability</b></td>
-    <td>Handles million-scale identity databases efficiently with low computational cost and high vector search speeds.</td>
-  </tr>
-</table>
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technologies |
-|-------|-------------|
-| **Face Detection & Embedding** | MTCNN (facenet-pytorch) ✅ / RetinaFace, ArcFace / FaceNet |
-| **Liveness Detection** | CNN-based passive liveness models |
-| **Deepfake Detection** | Vision Transformer (ViT) |
-| **Vector Search** | FAISS / Milvus |
-| **Backend** | Python, FastAPI ✅ |
-| **Frontend** | React 18, Vite ✅ |
-| **Database** | PostgreSQL, Redis |
-| **Deployment** | Docker, Kubernetes |
-| **Monitoring** | Prometheus, Grafana |
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting a pull request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-
-**Built with ❤️ by [vanshii2441](https://github.com/vanshii2441)**
-
-</div>
+<p align="center">
+  <strong>TRUE FACE AI</strong><br />
+  Intelligent Identity Verification · Facial Liveness · Security Analytics
+</p>
