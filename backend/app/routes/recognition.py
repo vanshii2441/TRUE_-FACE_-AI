@@ -399,7 +399,6 @@ async def recognize_face(
         liveness_res["is_live"],
         timing_ms["liveness_ms"],
     )
-
     if settings.enable_liveness_check and not liveness_res["is_live"]:
         t_total_end = time.perf_counter()
         timing_ms["total_ms"] = round((t_total_end - t_start) * 1000.0, 2)
@@ -413,7 +412,10 @@ async def recognize_face(
             threshold=use_threshold,
             timing=timing_ms,
             detected_count=1,
+            liveness_status=liveness_res.get("liveness_status", "SPOOF"),
+            deepfake_status="NOT_RUN",
         )
+
 
     # 4. Deepfake Synthetic Detection Stage
     t_df_start = time.perf_counter()
@@ -435,6 +437,8 @@ async def recognize_face(
             threshold=use_threshold,
             timing=timing_ms,
             detected_count=1,
+            liveness_status=liveness_res.get("liveness_status", "REAL"),
+            deepfake_status="UNAVAILABLE",
         )
 
     t_df_end = time.perf_counter()
@@ -460,6 +464,8 @@ async def recognize_face(
             threshold=use_threshold,
             timing=timing_ms,
             detected_count=1,
+            liveness_status=liveness_res.get("liveness_status", "REAL"),
+            deepfake_status=deepfake_res.get("deepfake_status", "DEEPFAKE"),
         )
 
     # 5. Face Embedding Generation Stage
@@ -566,7 +572,6 @@ async def recognize_face(
         deepfake_status=deepfake_res.get("deepfake_status", "REAL"),
     )
 
-
 def _build_recognize_response(
     outcome: Any,
     threshold: float,
@@ -607,7 +612,11 @@ def _build_recognize_response(
             timing_ms=full_timing,
         )
     except Exception as e:
-        logger.error("Failed to log audit history: %s", e, exc_info=True)
+        logger.error(
+            "Failed to log audit history: %s",
+            e,
+            exc_info=True,
+        )
 
     return RecognizeResponse(
         identity=outcome.identity,
@@ -626,12 +635,21 @@ def _build_recognize_response(
         matched_user=matched_candidate,
         best_similarity=outcome.similarity_score,
         threshold=threshold,
-        is_live=outcome.liveness_score >= settings.liveness_threshold,
-        liveness_status=liveness_status,
-        is_deepfake=outcome.deepfake_probability >= settings.deepfake_threshold,
-        deepfake_status=deepfake_status,
         top_candidates=top_candidates or [],
         detected_faces_count=detected_count,
+        is_live=(
+            outcome.final_decision != "LIVENESS_FAILED"
+            and outcome.liveness_score >= settings.liveness_threshold
+        ),
+        liveness_status=(
+            "SPOOF"
+            if outcome.final_decision == "LIVENESS_FAILED"
+            else liveness_status
+        ),
+        is_deepfake=(
+            outcome.deepfake_probability >= settings.deepfake_threshold
+        ),
+        deepfake_status=deepfake_status,
         timing_ms=full_timing,
     )
 

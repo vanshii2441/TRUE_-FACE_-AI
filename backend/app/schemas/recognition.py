@@ -19,10 +19,16 @@ class EnrollResponse(BaseModel):
     face_confidence: float = Field(..., description="Detection confidence score for enrolled face")
     liveness_score: float = Field(default=1.0, description="Liveness confidence score (0.0 to 1.0)")
     is_live: bool = Field(default=True, description="True if face passed liveness anti-spoofing check")
-    liveness_status: str = Field(default="REAL", description="Liveness evaluation status ('REAL' or 'SPOOF')")
+    liveness_status: str = Field(
+        default="REAL",
+        description="Anti-spoofing classification status ('REAL', 'SPOOF', or 'UNAVAILABLE')",
+    )
     deepfake_probability: float = Field(default=0.0, description="Deepfake probability score (0.0 to 1.0)")
     is_deepfake: bool = Field(default=False, description="True if face crop is classified as deepfake")
-    deepfake_status: str = Field(default="REAL", description="Deepfake classification status ('REAL' or 'DEEPFAKE')")
+    deepfake_status: str = Field(
+        default="REAL",
+        description="Deepfake detection status ('REAL', 'DEEPFAKE', 'NOT_RUN', or 'UNAVAILABLE')",
+    )
     timing_ms: dict[str, float] = Field(
         default_factory=dict,
         description="Execution latency breakdown in milliseconds",
@@ -145,7 +151,7 @@ class RecognizeResponse(BaseModel):
     )
     liveness_status: str = Field(
         default="REAL",
-        description="Anti-spoofing classification status ('REAL' or 'SPOOF')",
+        description="Anti-spoofing classification status ('REAL', 'SPOOF', or 'UNAVAILABLE')",
     )
     is_deepfake: bool = Field(
         default=False,
@@ -153,7 +159,7 @@ class RecognizeResponse(BaseModel):
     )
     deepfake_status: str = Field(
         default="REAL",
-        description="Deepfake detection classification status ('REAL' or 'DEEPFAKE')",
+        description="Deepfake detection status ('REAL', 'DEEPFAKE', 'NOT_RUN', or 'UNAVAILABLE')",
     )
     top_candidates: list[RecognizeCandidate] = Field(
         default_factory=list,

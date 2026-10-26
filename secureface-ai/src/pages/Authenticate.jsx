@@ -631,7 +631,9 @@ function Authenticate() {
                     {((result.deepfake_probability || 0) * 100).toFixed(1)}%
                   </span>
                   <span className="result-metric-sub">
-                    Status: {result.deepfake_status || (result.is_deepfake ? 'SYNTHETIC' : 'REAL')}
+                    Status: {result.deepfake_status === 'NOT_RUN'
+                       ? 'NOT RUN'
+                       : (result.deepfake_status || (result.is_deepfake ? 'SYNTHETIC' : 'REAL'))}
                   </span>
                 </div>
               </div>
