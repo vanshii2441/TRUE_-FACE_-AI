@@ -1,234 +1,185 @@
-# 🛡️ TRUE FACE AI
+# TRUE FACE AI
 
-### Enterprise-Grade Facial Recognition & Anti-Spoofing Platform
+A Flask web app that checks a face is **live** before matching it to a registered identity.
+Each photo goes through detection, a face check, a liveness check, a deepfake screen and an identity match.
 
-A facial recognition and security platform designed to support biometric identity verification, facial liveness detection, and CNN-based deepfake detection.
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg) ![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License" />
-  <img src="https://img.shields.io/badge/Python-3.9%2B-green.svg" alt="Python 3.9+" />
-  <img src="https://img.shields.io/badge/Status-Active%20Development-orange.svg" alt="Active Development" />
-</p>
+> **Read this first.** This is a learning project, not a certified security product.
+> The training data is 100 real faces at 25 x 25 pixels (LFW subset). Print, screen-replay and deepfake
+> samples are **simulated** from those faces because no spoof dataset could be downloaded when this was built.
+> See [Limits and honest numbers](#limits-and-honest-numbers) before relying on any result.
 
----
+## Quick start
 
-## 📌 Overview
+```bash
+# Linux / macOS
+./run.sh
 
-TRUE FACE AI is an intelligent security platform combining facial recognition, liveness analysis, and deep-learning-based detection techniques.
+# Windows
+run.bat
+```
 
-The application is built around a React frontend, Python backend, and machine-learning components. Its goal is to support identity enrollment, camera-based verification, spoof detection, and security monitoring through a modular architecture.
+Or step by step:
 
-## ✨ Key Features
+```bash
+python -m venv venv
+source venv/bin/activate            # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python app.py                       # open http://127.0.0.1:5000
+```
 
-### 🏠 Home & Landing Page
-- Interactive landing page introducing the platform.
-- Feature cards and navigation to the main modules.
-- Clear calls to action for accessing verification features.
+The dataset (`data/`) and trained models (`models/`) are already included. To rebuild them:
 
-### 📷 Live Camera & Face Positioning
-- Live camera interface for facial verification.
-- Oval face-positioning guide to help align the face.
-- Capture preview before proceeding with verification.
+```bash
+python scripts/build_dataset.py     # regenerates data/ from the bundled real LFW faces
+python scripts/train_all.py         # trains and writes models/*.joblib and models/metrics.json
+```
 
-### 👥 Registered Users — Identity Database
-- Interface for viewing registered identities.
-- User cards and identity information.
-- Empty-state interface when no identities are enrolled.
-- Integration with the existing user-management API.
+If you install a different scikit-learn version than the one the models were saved with, the app reports the
+model as "Missing" on the dashboard. Run `python scripts/train_all.py` (about 20 seconds) to fix it.
 
-### 📊 Security Dashboard
-- Dashboard analytics and system-health information.
-- Security activity indicators.
-- Scroll navigation to the analytics section.
+The camera needs `https://` or `localhost`. On other hosts use **Upload a photo**.
 
-### 🛡️ Facial Liveness Detection
-- Existing PyTorch CNN liveness model.
-- Image preprocessing and model inference.
-- Real-face versus spoof classification.
-- Threshold-based presentation-attack detection.
+## Pages
 
-### 🔍 CNN-Based Deepfake Detection
-- CNN-based deepfake detection development.
-- PyTorch model architecture and inference workflow.
-- Training and evaluation workflow.
-- Planned integration with the broader verification pipeline.
-
-### 🔐 Facial Recognition
-- Designed to match facial inputs against registered identities.
-- Supports the intended biometric verification workflow.
-
-*Feature availability depends on the current implementation and integration status. Planned functionality should not be considered production-ready.*
-
-## 🧠 Deep Learning Architecture
-
-### 1. Facial Liveness Detection
-
-The existing liveness implementation includes:
-
-- `liveness_net.py` — CNN model architecture.
-- `liveness_detector.py` — model loading, preprocessing, inference, and threshold-based decisions.
-- `train_liveness.py` — model training and evaluation workflow.
-
-The liveness model uses a **128 × 128 pixel** input size and two output classes:
-
-| Class | Description |
+| Page | What it does |
 |---|---|
-| `0` | Real face |
-| `1` | Spoof face |
+| `/` | Landing page explaining the five-step check |
+| `/verify` | Camera with an oval guide, capture preview, then verification with per-step results |
+| `/register` | Add a person with 3 to 8 photos (camera or upload) |
+| `/users` | Search registered users, remove a person and their face samples |
+| `/dashboard` | Outcomes, 7-day activity, model test metrics, system health, thresholds, audit log |
 
-The detector converts the image into the expected color format, resizes and normalizes it, and uses the model output to determine whether the input meets the configured liveness threshold.
+The layout is responsive from phone width up, has a keyboard-friendly focus style and respects reduced motion.
 
-### 2. CNN-Based Deepfake Detection
+## How a check works
 
-TRUE FACE AI uses a **PyTorch CNN (DeepfakeNet)** as the intended deepfake detection model, replacing the earlier Vision Transformer (ViT) description.
+1. **Detect**: LBP cascade (bundled `backend/assets/lbpcascade_frontalface_opencv.xml`, loaded with scikit-image).
+2. **Face check**: classifier rejects regions that are not faces.
+3. **Liveness**: random forest on texture, contrast, glare and frequency features. Blocks the check by default.
+4. **Deepfake screen**: random forest on local-consistency features. Advisory by default (see limits).
+5. **Identity**: OpenCV LBPH recogniser over enrolled samples. Lower distance means a closer match.
 
-The deepfake detection workflow is designed to include:
+Photos are processed in memory. Enrolment keeps small 100 x 100 grayscale face patches in `instance/faces/`;
+the audit log stores scores and outcomes, never images.
 
-1. Dataset preparation and image preprocessing.
-2. CNN model training.
-3. Evaluation using suitable test data and classification metrics.
-4. Loading trained model weights for inference.
-5. Integration of detection results into the security workflow.
+## API
 
-Model training, evaluation, and end-to-end integration should be marked complete only after they have been verified against the current source code.
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| GET | `/api/health` | | 200 when all models load, 503 otherwise |
+| POST | `/api/verify` | `{"image": "data:image/jpeg;base64,..."}` or multipart `image` | Returns `decision`, `steps`, `identity`, `latency_ms` |
+| POST | `/api/enroll` | `{"name", "email?", "department?", "images": [...]}` or multipart | 201 on success, 422 if fewer than 3 usable photos |
+| GET | `/api/users` | | |
+| DELETE | `/api/users/<id>` | | Also deletes stored face samples |
+| GET | `/api/stats` | | Dashboard data |
 
-## 🧪 Testing & Validation
+`decision` is one of `verified`, `unknown`, `rejected_spoof`, `rejected_deepfake`, `no_face`.
 
-**Backend test result: PASSED (86/86)**
+## Configuration (environment variables)
 
-The reported backend test run includes:
+| Variable | Default | Meaning |
+|---|---|---|
+| `LIVENESS_THRESHOLD` | `0.50` | Minimum liveness score to pass |
+| `DEEPFAKE_THRESHOLD` | `0.50` | Minimum deepfake-screen score to pass |
+| `FACE_CHECK_THRESHOLD` | `0.50` | Minimum face-check score |
+| `RECOGNITION_MAX_DISTANCE` | `75` | Maximum LBPH distance for a match |
+| `ENFORCE_LIVENESS` | `true` | A failed liveness check rejects the photo |
+| `ENFORCE_DEEPFAKE` | `false` | Set `true` to let the deepfake screen reject photos |
+| `SECRET_KEY` | placeholder | Set a real value in production |
+| `TRUEFACE_INSTANCE_DIR` | `./instance` | Where the database and face samples live |
+| `PORT`, `HOST` | `5000`, `127.0.0.1` | For `python app.py` |
 
-- **Tests passed:** 86/86
-- **Warnings:** 1
+## Deploy
 
-The test count refers to the reported backend test suite. It does not represent model accuracy or independently establish that all CNN, deepfake detection, and end-to-end workflows have been validated.
+```bash
+# Production server (Linux/macOS)
+gunicorn "app:create_app()" --bind 0.0.0.0:8000 --workers 2 --timeout 60
 
-Testing should cover API behavior, authentication, liveness decisions, model loading, error handling, and frontend-backend integration.
+# Windows
+waitress-serve --port=8000 --call app:create_app
 
-## 🏗️ Technology Stack
+# Docker (retrains the models at build time)
+docker build -t trueface-ai .
+docker run -p 8000:8000 -v trueface-data:/app/instance -e SECRET_KEY=change-me trueface-ai
+```
 
-| Component | Technology |
-|---|---|
-| Frontend | React, JavaScript, HTML5, CSS3 |
-| Backend | Python |
-| Deep Learning | PyTorch, CNN |
-| Computer Vision | OpenCV |
-| API Communication | Frontend service layer and backend APIs |
-| Version Control | Git and GitHub |
+A `Procfile` is included for Heroku-style platforms. Serve over HTTPS so browsers allow camera access.
+The app has **no login**. Put it behind authentication before exposing it, because it stores biometric patches.
 
-## 📂 Project Structure
+## Tests
+
+```bash
+python -m pytest
+```
+
+The suite covers pages, headers, enrolment, verification (including print-like and screen-like inputs and
+unregistered faces), input validation, the dashboard API, the feature extractor, the detector, the synthetic
+generators and minimum model quality.
+
+## Limits and honest numbers
+
+Hold-out results from `models/metrics.json` (split by source face, so no near-duplicate leakage):
+
+| Model | Data | Accuracy | AUC | False accept | False reject |
+|---|---|---|---|---|---|
+| Face check | Real faces vs real non-face patches | 100% | 100% | 0% | 0% |
+| Liveness | Real faces vs **simulated** print/screen attacks | 88% | 96% | 12.5% | 11.3% |
+| Deepfake screen | Real faces vs **simulated** swap/smooth/warp | 58% (65% 5-fold CV) | 67% | 44% | 40% |
+
+- The face-check "real data" is easy: the non-face patches are mostly flat gradients.
+- The liveness score measures how well the model finds *the simulator's* artefacts. Real attack footage will behave differently.
+- The deepfake screen is only modestly better than chance at 25 x 25 pixels, so it does not block by default.
+- Recognition was calibrated with one enrolled person and the 100 LFW faces as impostors
+  (`python scripts/calibrate_recognition.py`). That is not an identity benchmark. Measure false accept and
+  false reject on your own people before trusting the match threshold.
+- The original README mentioned PyTorch CNNs. They are **not** used here; the models are scikit-learn classifiers
+  on hand-built image features, because PyTorch could not be installed when this was built.
+
+### Making it production-grade
+
+1. Put real data in `data/real`, `data/spoof` and `data/deepfake` (and `data/nonface`). Use 64 x 64 PNGs; keep one
+   source person's files under the same prefix before the first underscore, for example `p012_a.png`, so the
+   trainer keeps them on one side of the split.
+2. Run `python scripts/train_all.py` and check `models/metrics.json`.
+3. Set `ENFORCE_DEEPFAKE=true` only once the deepfake numbers justify it.
+4. Replace the recogniser with a modern face-embedding model and add authentication, rate limiting and HTTPS.
+
+## Project structure
 
 ```text
-TRUE-FACE-AI-GIT/
-├── secureface-ai/
-│   └── src/
-│       ├── pages/
-│       ├── components/
-│       └── services/
+trueface-ai/
+├── app.py                  Flask app (pages + JSON API)
+├── config.py               Settings and thresholds
 ├── backend/
-│   ├── liveness_net.py
-│   ├── liveness_detector.py
-│   └── train_liveness.py
-├── models/
-├── data/
-├── README.md
-└── LICENSE
+│   ├── face_detector.py    LBP cascade detector
+│   ├── features.py         Image features for the classifiers
+│   ├── classifier.py       Face-check, liveness and deepfake model wrappers
+│   ├── recognizer.py       LBPH identity matching
+│   ├── pipeline.py         Five-step verification flow
+│   ├── db.py               SQLite users and audit log
+│   ├── synth.py            Simulated spoof / deepfake generators
+│   ├── utils.py            Image decoding and normalisation
+│   └── assets/             Cascade XML and the real LFW subset (lfw_subset.npy)
+├── data/                   real/ nonface/ spoof/ deepfake/ (64 x 64 PNGs)
+├── models/                 Trained models and metrics.json
+├── scripts/                build_dataset.py, train_all.py, calibrate_recognition.py
+├── templates/ static/      Responsive frontend (no external CDNs or fonts)
+├── tests/                  pytest suite
+├── Dockerfile  Procfile  requirements.txt  run.sh  run.bat
+└── instance/               Database and face samples (created at runtime)
 ```
 
-*This is an illustrative structure. Preserve the actual folder locations in your repository and include the deepfake model files at their real paths.*
+## Dataset credit
 
-## 🚀 Getting Started
+Real faces come from the Labeled Faces in the Wild (LFW) subset bundled with scikit-image
+(100 faces and 100 non-face patches, 25 x 25 grayscale). Spoof and deepfake images are generated from them by `backend/synth.py`.
 
-### Prerequisites
+## Team
 
-- Python 3.9 or later
-- Node.js and npm
-- Git
+Mahi Srivastava, Vanshika Agrawal and Vaishnavi Singh Rajpoot.
 
-### 1. Clone the Repository
+## Licence
 
-```bash
-git clone https://github.com/vanshii2441/TRUE_-FACE_-AI.git
-cd TRUE_-FACE_-AI
-```
-
-### 2. Start the Frontend
-
-```bash
-cd secureface-ai
-npm install
-npm run dev
-```
-
-Open the local URL displayed by Vite.
-
-### 3. Start the Backend
-
-Open a separate terminal and navigate to the backend directory:
-
-```bash
-cd backend
-python -m venv venv
-```
-
-Activate the virtual environment on Windows:
-
-```cmd
-venv\Scripts\activate
-```
-
-Install the dependencies using the backend's actual requirements file:
-
-```bash
-pip install -r requirements.txt
-```
-
-Start the backend using the application's configured entry point.
-
-Ensure that required environment variables, dependencies, model weights, and backend configuration are set before running the application.
-
-## 📈 Development Status
-
-| Module | Status |
-|---|---|
-| Home / Landing Page | Implemented |
-| Registered Users Interface | Implemented |
-| Dashboard Analytics UI | Implemented |
-| Live Camera Positioning Guide | Implemented |
-| Capture Preview | Implemented |
-| Liveness CNN | Existing implementation |
-| CNN Training & Evaluation | Further validation required |
-| CNN-Based Deepfake Detection | Implementation and integration to be verified |
-| Facial Recognition Integration | Pending verification |
-| Security Audit Log | Planned |
-| End-to-End Pipeline Testing | Ongoing |
-
-Update the status of each module when the corresponding work has been implemented and verified.
-
-## 🔒 Security Considerations
-
-- Protect biometric data and restrict access to authorized users.
-- Store secrets and credentials in environment variables.
-- Validate inputs and handle camera, API, and model-loading failures safely.
-- Evaluate false acceptance and false rejection rates.
-- Test liveness and deepfake detection against representative datasets.
-- Do not treat model predictions as a guarantee against every spoofing or manipulation attack.
-
-## 👩‍💻 Project Team
-
-Developed collaboratively by:
-
-- **Mahi Srivastava**
-- **Vanshika Agrawal**
-- **Vaishnavi Singh Rajpoot**
-
-## 📜 License
-
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
----
-
-<p align="center">
-  <strong>TRUE FACE AI</strong><br />
-  Intelligent Identity Verification · CNN-Based Detection · Security Analytics
-</p>
+MIT. See `LICENSE`.

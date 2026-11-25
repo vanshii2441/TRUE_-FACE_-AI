@@ -1,0 +1,74 @@
+{
+  "trained_at": "2026-11-20 05:41:00",
+  "tasks": {
+    "facecheck": {
+      "n_train": 640,
+      "n_test": 160,
+      "accuracy": 1.0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "roc_auc": 1.0,
+      "far": 0.0,
+      "frr": 0.0,
+      "confusion": {
+        "tn": 88,
+        "fp": 0,
+        "fn": 0,
+        "tp": 72
+      },
+      "cv_accuracy_mean": 0.9912,
+      "cv_accuracy_std": 0.0109,
+      "description": "Real LFW faces vs real non-face patches (both from the LFW subset)",
+      "synthetic_attacks": false,
+      "n_genuine": 400,
+      "n_attack": 400
+    },
+    "liveness": {
+      "n_train": 640,
+      "n_test": 160,
+      "accuracy": 0.8812,
+      "precision": 0.8765,
+      "recall": 0.8875,
+      "f1": 0.882,
+      "roc_auc": 0.9617,
+      "far": 0.125,
+      "frr": 0.1125,
+      "confusion": {
+        "tn": 70,
+        "fp": 10,
+        "fn": 9,
+        "tp": 71
+      },
+      "cv_accuracy_mean": 0.8875,
+      "cv_accuracy_std": 0.0205,
+      "description": "Real LFW faces vs SIMULATED print/screen-replay attacks of the same faces",
+      "synthetic_attacks": true,
+      "n_genuine": 400,
+      "n_attack": 400
+    },
+    "deepfake": {
+      "n_train": 640,
+      "n_test": 160,
+      "accuracy": 0.5813,
+      "precision": 0.5783,
+      "recall": 0.6,
+      "f1": 0.589,
+      "roc_auc": 0.6664,
+      "far": 0.4375,
+      "frr": 0.4,
+      "confusion": {
+        "tn": 45,
+        "fp": 35,
+        "fn": 32,
+        "tp": 48
+      },
+      "cv_accuracy_mean": 0.6487,
+      "cv_accuracy_std": 0.0183,
+      "description": "Real LFW faces vs SIMULATED face-swap / smoothing / warp manipulations",
+      "synthetic_attacks": true,
+      "n_genuine": 400,
+      "n_attack": 400
+    }
+  }
+}

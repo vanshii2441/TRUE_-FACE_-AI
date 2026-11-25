@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Verify a face - TRUE FACE AI{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="page-head">
+    <h1>Verify a face</h1>
+    <p>Line your face up inside the oval, capture a photo, review it, then run the check.</p>
+  </div>
+
+  <div class="workspace">
+    <section aria-label="Camera">
+      {% set placeholder_title = "Camera is off" %}
+      {% set placeholder_text = "Start the camera to line up your face, or upload a photo." %}
+      {% include "_stage.html" %}
+      <div class="btn-row stage-actions">
+        <button class="btn btn-dark" id="startBtn" type="button">Start camera</button>
+        <button class="btn btn-primary" id="captureBtn" type="button" hidden>Capture photo</button>
+        <button class="btn btn-primary" id="verifyBtn" type="button" hidden>Verify this photo</button>
+        <button class="btn btn-ghost" id="retakeBtn" type="button" hidden>Retake</button>
+        <button class="btn btn-ghost" id="switchBtn" type="button" hidden>Switch camera</button>
+        <div class="upload-area" id="uploadDropzone">
+  <div class="upload-icon">↑</div>
+  <p><strong>Drag and drop your image here</strong></p>
+  <p class="upload-subtext">or choose an image from your device</p>
+
+  <label class="btn btn-ghost upload-select" for="fileInput">
+    Choose image
+  </label>
+
+  <input
+    id="fileInput"
+    type="file"
+    accept="image/jpeg,image/png,image/webp,image/gif"
+    class="sr-only"
+  >
+
+  <p class="upload-limit">JPG, PNG, WEBP or GIF · Maximum 10 MB</p>
+</div>
+
+<button
+  class="btn btn-ghost"
+  id="removeUploadBtn"
+  type="button"
+  hidden
+>
+  Remove uploaded image
+</button>
+      </div>
+      <p class="hint">Use even light on your face and look straight at the lens. The camera needs https:// or localhost.</p>
+    </section>
+
+    <section class="sheet" aria-live="polite" aria-label="Result">
+      <h2 style="font-size:1.4rem">Result</h2>
+      <div id="result"><p class="empty-note">No check yet. Capture or upload a photo to see each step here.</p></div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+<script src="{{ url_for('static', filename='js/verify.js') }}"></script>
+{% endblock %}

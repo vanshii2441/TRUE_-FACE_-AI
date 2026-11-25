@@ -1,0 +1,19 @@
+
+{% extends "base.html" %}
+{% block title %}Threat Monitor - TRUE FACE AI{% endblock %}
+{% block content %}
+<div class="wrap" style="padding-bottom:3rem">
+    <div class="page-head">
+        <h1>Threat Monitor</h1>
+        <p>Monitor rejected spoof attempts, possible deepfakes and suspicious verification activity.</p>
+    </div>
+    <section class="sheet">
+        <div id="threatMonitor">
+            <p class="empty-note">Loading security events...</p>
+        </div>
+    </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/monitoring.js') }}"></script>
+{% endblock %}

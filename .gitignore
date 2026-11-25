@@ -1,47 +1,25 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-backend/venv/
-backend/.venv/
-backend/.pytest_cache/
 .pytest_cache/
+venv/
+.venv/
 
-# Node / React
+# Node.js
 node_modules/
-secureface-ai/node_modules/
-secureface-ai/dist/
 dist/
 
-# Environment & Secrets (NEVER COMMIT)
+# Environment variables and secrets
 .env
 .env.*
-*.env
-backend/.env
-backend/.env.*
-secureface-ai/.env
-secureface-ai/.env.*
+!.env.example
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
-# Logs
+# Runtime files
+instance/
 *.log
 
-# Vite temporary build files
-*.timestamp-*.mjs
-
-# Scratch directory
-scratch/
-
-# Runtime audit log data
-data/audit_history.json
-
-
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

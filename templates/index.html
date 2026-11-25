@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}TRUE FACE AI - Check a face is live, then check who it is{% endblock %}
+{% block content %}
+<section class="wrap hero">
+  <div>
+    <h1>Check that a face is real before you trust who it is.</h1>
+    <p class="lede">TRUE FACE AI runs a photo through face detection, a liveness check and a deepfake screen, then matches it against the people you have registered.</p>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="{{ url_for('verify_page') }}">Verify a face</a>
+      <a class="btn btn-ghost" href="{{ url_for('register_page') }}">Register a person</a>
+    </div>
+    <p class="fine">Works with your webcam or an uploaded photo. Everything runs on this server; photos are not stored after a check.</p>
+  </div>
+
+  <div class="spec" aria-hidden="true">
+    <svg viewBox="0 0 440 400" role="img">
+      <defs>
+        <pattern id="g" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#d5dde7" stroke-width="1"/></pattern>
+        <clipPath id="clip"><rect x="10" y="10" width="420" height="380" rx="10"/></clipPath>
+      </defs>
+      <rect x="10" y="10" width="420" height="380" rx="10" fill="#fff"/>
+      <rect x="10" y="10" width="420" height="380" rx="10" fill="url(#g)"/>
+      <g clip-path="url(#clip)">
+        <line x1="220" y1="10" x2="220" y2="390" stroke="#2f5bff" stroke-opacity=".35" stroke-dasharray="4 5"/>
+        <line x1="10" y1="170" x2="430" y2="170" stroke="#2f5bff" stroke-opacity=".35" stroke-dasharray="4 5"/>
+        <ellipse cx="220" cy="190" rx="112" ry="150" fill="#eef2f8" stroke="#14213d" stroke-width="2.5"/>
+        <path d="M118 372c10-58 58-86 102-86s92 28 102 86" fill="#dfe6f0" stroke="#14213d" stroke-width="2.5"/>
+        <g fill="none" stroke="#14213d" stroke-width="2.2" stroke-linecap="round">
+          <path d="M168 160q18-10 36 0M236 160q18-10 36 0"/>
+          <path d="M220 172v44q-8 8 0 10"/>
+          <path d="M184 258q36 26 72 0"/>
+        </g>
+        <g fill="#2f5bff"><circle cx="186" cy="168" r="4"/><circle cx="254" cy="168" r="4"/><circle cx="220" cy="226" r="4"/><circle cx="184" cy="258" r="4"/><circle cx="256" cy="258" r="4"/><circle cx="220" cy="278" r="4"/></g>
+        <g class="scan"><rect x="10" y="30" width="420" height="3" fill="#2f5bff"/><rect x="10" y="33" width="420" height="26" fill="#2f5bff" opacity=".12"/></g>
+      </g>
+      <g stroke="#14213d" stroke-width="1.4"><path d="M332 40h46M332 40v8M378 40v8"/><path d="M52 40v300M44 40h8M44 340h8"/></g>
+      <g font-family="Segoe UI, system-ui, sans-serif" font-size="12" fill="#4a5873" font-weight="600">
+        <text x="338" y="32">face width</text>
+        <text x="26" y="196" transform="rotate(-90 26 196)">head height</text>
+      </g>
+      <g font-family="Segoe UI, system-ui, sans-serif" font-size="12.5" font-weight="700">
+        <rect x="318" y="196" width="104" height="26" rx="13" fill="#dcf3ec"/><text x="332" y="213" fill="#0c8f6f">Live 0.89</text>
+        <rect x="318" y="230" width="104" height="26" rx="13" fill="#dcf3ec"/><text x="332" y="247" fill="#0c8f6f">Match 94%</text>
+      </g>
+      <g class="stamp" font-family="Charter, Georgia, serif" font-weight="700">
+        <rect x="262" y="318" width="150" height="52" rx="8" fill="none" stroke="#0c8f6f" stroke-width="4"/>
+        <text x="337" y="353" text-anchor="middle" font-size="30" fill="#0c8f6f">VERIFIED</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap split">
+    <div>
+      <h2>What happens in one check</h2>
+      <p class="muted">Each photo goes through the same five steps in order. The first step that fails ends the check and tells you why.</p>
+    </div>
+    <ol class="sequence">
+      <li><h3>Find the face</h3><p>A cascade detector locates the largest face in the photo and crops it.</p></li>
+      <li><h3>Confirm it is a face</h3><p>A second classifier rejects crops that are not faces, such as a poster or a wall.</p></li>
+      <li><h3>Test for liveness</h3><p>Texture, contrast and glare cues separate a live person from a printed photo or a screen.</p></li>
+      <li><h3>Screen for manipulation</h3><p>A deepfake score flags swapped, smoothed or warped faces. It is advisory until it is trained on better data.</p></li>
+      <li><h3>Match the identity</h3><p>The face is compared with the people you registered and a distance score decides the match.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap split">
+    <div><h2>What you can do here</h2></div>
+    <div class="feature-list">
+      <div class="feature"><h3>Verify</h3><p>Use the camera with an oval guide to line up your face, review the captured photo, then run the check.</p></div>
+      <div class="feature"><h3>Register</h3><p>Take three to eight photos of a person. Each one is checked before it is accepted.</p></div>
+      <div class="feature"><h3>Manage people</h3><p>Search the registered users and remove anyone, including their stored face samples.</p></div>
+      <div class="feature"><h3>Review activity</h3><p>The dashboard shows outcomes, daily volume, model accuracy and a log of recent checks.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="callout">
+      <div>
+        <h2>Built to learn from, not to guard a door</h2>
+        <p>The training data is a small real face set (100 faces from the LFW collection, 25 by 25 pixels). The spoof and deepfake samples are simulated from those faces.</p>
+      </div>
+      <ul>
+        <li>The dashboard shows the measured accuracy of each model, with the simulated tests labelled.</li>
+        <li>Liveness is enforced. The deepfake check only advises, because it is weak at this resolution.</li>
+        <li>Replace the files in <code>data/</code> with real attack footage and retrain before relying on any result.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap cta-band">
+    <h2>Try it with your own face</h2>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="{{ url_for('register_page') }}">Register first</a>
+      <a class="btn btn-ghost" href="{{ url_for('verify_page') }}">Go to verification</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

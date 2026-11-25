@@ -1,0 +1,19 @@
+<div class="stage" id="stage">
+  <video id="video" playsinline muted autoplay hidden></video>
+  <img id="still" class="still" alt="Captured photo" hidden>
+  <img id="capturedPreview" class="captured-preview"
+    alt="Captured photo preview" hidden>
+  <svg class="guide" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs>
+      <mask id="cut"><rect width="400" height="300" fill="#fff"/><ellipse cx="200" cy="146" rx="92" ry="122" fill="#000"/></mask>
+    </defs>
+    <rect width="400" height="300" fill="#0d1426" opacity=".55" mask="url(#cut)"/>
+    <ellipse id="ring" cx="200" cy="146" rx="92" ry="122" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="9 7"/>
+    <path d="M200 20v14M200 258v14M72 146h14M314 146h14" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".8"/>
+  </svg>
+  <div class="placeholder" id="placeholder">
+    <strong>{{ placeholder_title or "Camera is off" }}</strong>
+    <span>{{ placeholder_text or "Start the camera or upload a photo." }}</span>
+  </div>
+  <span class="status-pill" id="statusPill" hidden></span>
+</div>

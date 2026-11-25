@@ -1,0 +1,17 @@
+
+{% extends "base.html" %}
+{% block title %}System Status - TRUE FACE AI{% endblock %}
+{% block content %}
+<div class="wrap" style="padding-bottom:3rem">
+    <div class="page-head">
+        <h1>System Status</h1>
+        <p>Check the availability of the backend and AI components.</p>
+    </div>
+    <div id="systemStatus">
+        <p class="empty-note">Checking system health...</p>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/monitoring.js') }}"></script>
+{% endblock %}

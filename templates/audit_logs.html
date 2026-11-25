@@ -1,0 +1,19 @@
+
+{% extends "base.html" %}
+{% block title %}Audit Logs - TRUE FACE AI{% endblock %}
+{% block content %}
+<div class="wrap" style="padding-bottom:3rem">
+    <div class="page-head">
+        <h1>Audit Logs</h1>
+        <p>A record of registration, deletion and face verification activities.</p>
+    </div>
+    <section class="sheet">
+        <div id="auditLogs">
+            <p class="empty-note">Loading audit logs...</p>
+        </div>
+    </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/monitoring.js') }}"></script>
+{% endblock %}

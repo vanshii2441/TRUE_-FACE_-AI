@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Security dashboard - TRUE FACE AI{% endblock %}
+{% block content %}
+<div class="wrap" style="padding-bottom:3.5rem" id="analytics">
+  <div class="page-head">
+    <h1>Security dashboard</h1>
+    <p>What the system has decided, how the models performed in testing, and whether everything is running.</p>
+  </div>
+
+  <div id="dash"><p class="empty-note">Loading dashboard…</p></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}

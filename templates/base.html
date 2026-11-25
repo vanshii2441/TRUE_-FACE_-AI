@@ -1,0 +1,136 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#081521" id="themeColor">
+
+    <title>{% block title %}TRUE FACE AI{% endblock %}</title>
+
+    <meta name="description" content="Check that a face is live before matching it to a registered identity.">
+
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.svg') }}" type="image/svg+xml">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <header class="site-header">
+        <div class="wrap bar">
+
+            <!-- Brand Logo -->
+            <a class="brand" href="{{ url_for('home') }}" aria-label="TRUE FACE AI home">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none"
+                    xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <ellipse cx="16" cy="16" rx="9" ry="12"
+                        stroke="currentColor" stroke-width="2.4" />
+
+                    <path d="M16 1V7 M16 25V31 M1 16H7 M25 16H31"
+                        stroke="var(--cobalt)" stroke-width="2.4"
+                        stroke-linecap="round" />
+                </svg>
+
+                <span>TRUE FACE AI</span>
+            </a>
+
+            <!-- Mobile Menu Button -->
+            <button class="menu-btn" id="menuBtn" type="button"
+                aria-label="Open menu" aria-expanded="false" aria-controls="nav">
+
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+            </button>
+
+            <!-- Navigation -->
+            <nav class="nav" id="nav" aria-label="Main">
+
+                <a href="{{ url_for('home') }}"
+                    {% if page == 'home' %}aria-current="page"{% endif %}>
+                    Home
+                </a>
+
+                <a href="{{ url_for('users_page') }}"
+                    {% if page == 'users' %}aria-current="page"{% endif %}>
+                    Registered Users
+                </a>
+
+                <a href="{{ url_for('dashboard_page') }}"
+                    {% if page == 'dashboard' %}aria-current="page"{% endif %}>
+                    Dashboard
+                </a>
+
+                <a href="{{ url_for('audit_logs_page') }}"
+                    {% if page == 'audit-logs' %}aria-current="page"{% endif %}>
+                    Audit Logs
+                </a>
+
+                <a href="{{ url_for('threat_monitor_page') }}"
+                    {% if page == 'threat-monitor' %}aria-current="page"{% endif %}>
+                    Threat Monitor
+                </a>
+
+                <a href="{{ url_for('model_analytics_page') }}"
+                    {% if page == 'model-analytics' %}aria-current="page"{% endif %}>
+                    Model Analytics
+                </a>
+
+                <a href="{{ url_for('system_status_page') }}"
+                    {% if page == 'system-status' %}aria-current="page"{% endif %}>
+                    System Status
+                </a>
+
+                <a href="{{ url_for('register_page') }}"
+                    {% if page == 'register' %}aria-current="page"{% endif %}>
+                    Register
+                </a>
+
+                <a class="nav-cta" href="{{ url_for('verify_page') }}"
+                    {% if page == 'verify' %}aria-current="page"{% endif %}>
+                    Verify Face
+                </a>
+
+            </nav>
+
+            <!-- Theme Toggle -->
+            <button class="theme-toggle" id="themeToggle" type="button"
+                aria-label="Switch to light theme" title="Switch theme">
+                ☀️
+            </button>
+
+        </div>
+    </header>
+
+    <!-- Main Page Content -->
+    <main id="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="wrap">
+
+            <span>
+                TRUE FACE AI by Mahi Srivastava, Vanshika Agrawal and Vaishnavi Singh Rajpoot
+            </span>
+
+            <span>
+                MIT licence. A learning project, not a certified security product.
+            </span>
+
+        </div>
+    </footer>
+
+    <!-- Toast Notifications -->
+    <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+    <!-- Common JavaScript -->
+    <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+
+    {% block scripts %}{% endblock %}
+
+</body>
+</html>

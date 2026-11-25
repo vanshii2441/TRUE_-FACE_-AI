@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Register a person - TRUE FACE AI{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="page-head">
+    <h1>Register a person</h1>
+    <p>Add their details, then take {{ min_images }} to 8 photos. Vary the angle and expression slightly between shots.</p>
+  </div>
+
+  <div class="workspace">
+    <section aria-label="Camera">
+      {% set placeholder_title = "Camera is off" %}
+      {% set placeholder_text = "Start the camera to take photos, or upload them." %}
+      {% include "_stage.html" %}
+      <div class="btn-row stage-actions">
+        <button class="btn btn-dark" id="startBtn" type="button">Start camera</button>
+        <button class="btn btn-primary" id="captureBtn" type="button" hidden>Add photo</button>
+        <button class="btn btn-ghost" id="stopBtn" type="button" hidden>Stop camera</button>
+        <button class="btn btn-ghost" id="switchBtn" type="button" hidden>Switch camera</button>
+        <label class="btn btn-ghost" for="fileInput" style="margin:0">Upload photos</label>
+        <input id="fileInput" type="file" accept="image/*" multiple class="sr-only">
+      </div>
+      <div class="thumbs" id="thumbs" aria-label="Photos added"></div>
+    </section>
+
+    <section class="sheet">
+      <h2 style="font-size:1.4rem">Details</h2>
+      <form id="form" novalidate>
+        <div class="field">
+          <label for="name">Full name</label>
+          <input id="name" name="name" type="text" autocomplete="off" required minlength="2" maxlength="60">
+        </div>
+        <div class="field">
+          <label for="email">Email <span class="muted" style="font-weight:400">(optional)</span></label>
+          <input id="email" name="email" type="email" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="department">Department <span class="muted" style="font-weight:400">(optional)</span></label>
+          <input id="department" name="department" type="text" maxlength="60" autocomplete="off">
+        </div>
+        <p class="hint" id="count" style="margin-bottom:1rem">0 of {{ min_images }} photos added.</p>
+        <button class="btn btn-primary" id="submitBtn" type="submit" disabled style="width:100%">Register person</button>
+      </form>
+      <div id="problems" class="meta-line" role="alert"></div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>window.MIN_PHOTOS = {{ min_images }};</script>
+<script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+<script src="{{ url_for('static', filename='js/register.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Registered users - TRUE FACE AI{% endblock %}
+{% block content %}
+<div class="wrap" style="padding-bottom:3.5rem">
+  <div class="page-head">
+    <h1>Registered users</h1>
+    <p>Everyone the system can recognise. Removing a person also deletes their stored face samples.</p>
+  </div>
+
+  <div class="toolbar">
+    <div class="search">
+      <label class="sr-only" for="search">Search users</label>
+      <input id="search" type="search" placeholder="Search by name, email or department">
+    </div>
+    <a class="btn btn-primary" href="{{ url_for('register_page') }}">Register a person</a>
+  </div>
+
+  <div id="list" aria-live="polite"><p class="empty-note">Loading users…</p></div>
+</div>
+
+<dialog id="confirm">
+  <h3 id="confirmTitle">Remove this person?</h3>
+  <p class="muted" id="confirmText"></p>
+  <div class="btn-row" style="justify-content:flex-end">
+    <button class="btn btn-ghost" id="confirmNo" type="button">Keep user</button>
+    <button class="btn btn-danger" id="confirmYes" type="button">Remove user</button>
+  </div>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/users.js') }}"></script>{% endblock %}

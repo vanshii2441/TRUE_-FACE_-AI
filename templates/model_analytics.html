@@ -1,0 +1,17 @@
+
+{% extends "base.html" %}
+{% block title %}Model Analytics - TRUE FACE AI{% endblock %}
+{% block content %}
+<div class="wrap" style="padding-bottom:3rem">
+    <div class="page-head">
+        <h1>AI Model Analytics</h1>
+        <p>Model availability, training metrics, verification thresholds and system performance.</p>
+    </div>
+    <div id="modelAnalytics">
+        <p class="empty-note">Loading model analytics...</p>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/monitoring.js') }}"></script>
+{% endblock %}

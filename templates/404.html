@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Page not found - TRUE FACE AI{% endblock %}
+{% block content %}
+<section class="wrap not-found">
+  <h1>That page does not exist</h1>
+  <p class="muted">Check the address, or go back to a page that does.</p>
+  <div class="btn-row">
+    <a class="btn btn-primary" href="{{ url_for('home') }}">Go home</a>
+    <a class="btn btn-ghost" href="{{ url_for('verify_page') }}">Verify a face</a>
+  </div>
+</section>
+{% endblock %}
